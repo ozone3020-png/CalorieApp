@@ -93,11 +93,20 @@ no paid APIs, no Play Store fee.
 - [x] APP_TOKEN set (10 Nov): no/wrong token → 401; the app's Test connection → Working
 - [ ] Owner: back up ~/.android/calorieapp-release.jks and keystore.properties
 
-### Phase 6 — Optional
-- [ ] Weekly / monthly charts
-- [ ] CSV export / backup
-- [ ] Home-screen widget
-- [ ] Accounts with cloud sync (largest item; last)
+### Phase 6 — Extras ✅
+- [x] Backup (JSON: meals, favourites, settings) / restore (skips meals already present) / CSV export, via the
+      system file picker. Checked on the Pixel: backup of 5 meals; restoring it added 0 (duplicate check)
+- [x] Trends: 7/30/90-day energy bars vs goal line (tap a bar → that day), averages, days within goal, macros
+- [x] Home-screen widget (Glance): today's energy vs goal, left/over, macros; refreshes on any log change
+- [x] Cloud sync. The sync key is the account; records are AES-256-GCM encrypted on the phone (server sees a
+      hash of the key and ciphertext only). Worker `/sync` on Cloudflare D1 (`calorie-sync`, schema.sql),
+      last-write-wins, tombstones for deletions; DB v5 (manual migration, tested on a real copy first).
+      Checked end to end: test app ⇄ an independent Node client (add, edit, delete both ways)
+- [ ] Owner: add the widget to the home screen; decide whether to turn sync on (and save the key safely)
+
+### Ideas for later
+- Sign in with Google as an alternative to the sync key (needs a Google Cloud project)
+- Swipe between days on the log; weight tracking; reminders to log meals
 
 ## Working notes
 

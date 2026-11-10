@@ -44,6 +44,11 @@ What they need: a computer with Node.js 20+, a free Cloudflare account, and the 
     npx wrangler login                     # opens the browser: sign in or create a free Cloudflare account
     npx wrangler deploy                    # prints https://calorie-analyzer.<their-name>.workers.dev
 
+For cloud sync on their Worker (optional), create the database once and put its id in `wrangler.toml`:
+
+    npx wrangler d1 create calorie-sync     # copy the database_id it prints into wrangler.toml
+    npx wrangler d1 execute calorie-sync --remote --file schema.sql
+
 Optional but recommended (both free):
 
     npx wrangler secret put USDA_API_KEY   # key from https://fdc.nal.usda.gov/api-key-signup
