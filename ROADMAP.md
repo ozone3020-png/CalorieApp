@@ -90,7 +90,8 @@ no paid APIs, no Play Store fee.
 - [x] SHARING.md: building, installing on a friend's phone, their own Worker, how the Worker is protected
 - [x] Worker protection: `APP_TOKEN` secret checked against the app's X-App-Token (off until the secret is
       set); ~20 requests/min per device via Cloudflare's rate limiting binding
-- [ ] Owner: set the APP_TOKEN secret; back up the signing key and keystore.properties
+- [x] APP_TOKEN set (10 Nov): no/wrong token → 401; the app's Test connection → Working
+- [ ] Owner: back up ~/.android/calorieapp-release.jks and keystore.properties
 
 ### Phase 6 — Optional
 - [ ] Weekly / monthly charts

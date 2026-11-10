@@ -376,6 +376,8 @@ private fun SourceLine(item: EditableFoodItem) {
                 style = style,
                 color = MaterialTheme.colorScheme.tertiary,
             )
+            // Saved before sources were recorded: nothing to say.
+            item.original.source == NutritionSource.UNKNOWN -> Unit
             item.original.source == NutritionSource.AI -> Text(
                 "AI estimate (not found in AFCD or USDA)",
                 style = style,
