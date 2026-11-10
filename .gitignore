@@ -1,0 +1,17 @@
+*.iml
+.gradle/
+.idea/
+.kotlin/
+local.properties
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+worker/node_modules/
+worker/.wrangler/
+
+# Worker build output, and the raw AFCD downloads (licensed to whoever accepted FSANZ's terms;
+# re-download them from FSANZ to regenerate worker/src/afcd.json with scripts/build_afcd.py)
+worker/dist/
+worker/data/
+__pycache__/

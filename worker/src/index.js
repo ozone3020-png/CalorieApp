@@ -1,0 +1,100 @@
+// POST /analyze { image: "<base64 jpeg>", mime_type?: "image/jpeg" }
+//   -> { items: [{ name, grams, calories, protein_g, carbs_g, fat_g, source, match }] }
+// POST /lookup  { name: "rice", grams: 180, unit?: "g" | "ml" }
+//   -> { item: { name, grams, calories, protein_g, carbs_g, fat_g, source, match } }
+//
+// source: "afcd" (Australian Food Composition Database), "usda" (USDA FoodData Central) or "ai" (model estimate).
+import { num, parseJson, runModel } from "./model.js";
+import { resolveNutrition, UnknownFoodError } from "./nutrition.js";
+
+const VISION_PROMPT = `You identify food in meal photos. List each distinct food item.
+For each item:
+- name: a short generic name using Australian food terms, including how it is prepared
+  when visible (e.g. "white rice, boiled", "beef mince, cooked", "capsicum, raw", "hot chips").
+  In Australia "tomato sauce" means the ketchup-style condiment: call a sauce on pasta
+  "tomato pasta sauce" (or "bolognese sauce" if it contains mince).
+- unit: "ml" for drinks and other liquids you would pour (water, milk, juice, soft drink, coffee, beer, wine),
+  otherwise "g".
+- grams: estimated amount in that unit from visual cues (plate size, glass/can/bottle size, typical servings).
+- calories, protein_g, carbs_g, fat_g: your estimate for that portion.
+
+Respond with ONLY a JSON object, no prose, no markdown fences, in exactly this shape:
+{"items":[{"name":"string","unit":"g","grams":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number}]}
+If no food is visible, return {"items":[]}.`;
+
+const MAX_IMAGE_BASE64_CHARS = 6_000_000; // ~4.5 MB JPEG
+const MAX_ITEMS = 12;
+
+export default {
+  async fetch(request, env) {
+    const { pathname } = new URL(request.url);
+    const route = { "/analyze": analyze, "/lookup": lookup }[pathname];
+    if (!route) return json({ error: "not found" }, 404);
+    if (request.method !== "POST") return json({ error: "use POST" }, 405);
+
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return json({ error: "body must be JSON" }, 400);
+    }
+    try {
+      return await route(body ?? {}, env);
+    } catch (err) {
+      return json({ error: "model call failed", detail: String(err) }, 502);
+    }
+  },
+};
+
+async function analyze(body, env) {
+  const image = typeof body.image === "string" ? body.image.replace(/^data:[^,]+,/, "") : "";
+  const mime = typeof body.mime_type === "string" ? body.mime_type : "image/jpeg";
+  if (!image) return json({ error: "missing 'image' (base64)" }, 400);
+  if (image.length > MAX_IMAGE_BASE64_CHARS) return json({ error: "image too large" }, 413);
+
+  const response = await runModel(env, [
+    { role: "system", content: VISION_PROMPT },
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Analyze this meal." },
+        { type: "image_url", image_url: { url: `data:${mime};base64,${image}` } },
+      ],
+    },
+  ]);
+
+  const parsed = parseJson(response);
+  const list = Array.isArray(parsed) ? parsed : parsed?.items;
+  if (!Array.isArray(list)) {
+    return json({ error: "could not parse model output", raw: String(response ?? "").slice(0, 500) }, 502);
+  }
+  const detected = list
+    .filter((it) => it && typeof it.name === "string" && it.name.trim() && num(it.grams, 0) > 0)
+    .slice(0, MAX_ITEMS)
+    .map((it) => ({ ...it, name: it.name.trim() }));
+
+  return json({ items: await resolveNutrition(env, detected) });
+}
+
+async function lookup(body, env) {
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const grams = num(body.grams, 1);
+  if (!name) return json({ error: "missing 'name'" }, 400);
+  if (!(grams > 0)) return json({ error: "'grams' must be > 0" }, 400);
+
+  try {
+    const unit = body.unit === "ml" ? "ml" : "g";
+    const [item] = await resolveNutrition(env, [{ name, grams, unit }]);
+    return json({ item });
+  } catch (err) {
+    if (err instanceof UnknownFoodError) return json({ error: "unknown food", detail: err.message }, 404);
+    throw err;
+  }
+}
+
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
