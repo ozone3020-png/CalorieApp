@@ -15,14 +15,24 @@ import com.calorieapp.data.AnalyzeException
 import com.calorieapp.data.AnalyzeRepository
 import com.calorieapp.data.FoodItem
 import com.calorieapp.data.FoodUnit
+import com.calorieapp.data.LoggedMeal
 import com.calorieapp.data.MealRepository
+import com.calorieapp.data.NutritionSource
 import com.calorieapp.data.ScanMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
+
+/** How the meal being edited started. */
+enum class MealOrigin { PHOTO, MANUAL, EDIT }
 
 sealed interface AnalysisState {
     data object Idle : AnalysisState
@@ -32,7 +42,7 @@ sealed interface AnalysisState {
 }
 
 /**
- * Holds one meal's journey: photo → analysis → edit → save.
+ * Holds one meal's journey: (photo / barcode → analysis, or typed foods, or a saved meal) → edit → save.
  * Scoped to the activity so the camera, analysing and results screens share it.
  */
 class MealViewModel(
@@ -72,6 +82,76 @@ class MealViewModel(
     private var job: Job? = null
     private val lookupJobs = mutableMapOf<Long, Job>()
     private var nextKey = 0L
+
+    var origin by mutableStateOf(MealOrigin.PHOTO)
+        private set
+
+    /** The day a new meal is logged on (the day being viewed in the log), or the edited meal's day. */
+    var targetDay: LocalDate = LocalDate.now()
+        private set
+    private var editingMealId: Long? = null
+
+    /** The items as they were when editing started, to tell whether anything changed. */
+    private var initialItems: List<EditableFoodItem> = emptyList()
+
+    /** Whether closing would lose anything: a photo, typed foods, or changes to a saved meal. */
+    val hasUnsavedWork: Boolean
+        get() = when (origin) {
+            MealOrigin.PHOTO -> true
+            MealOrigin.MANUAL -> editItems.isNotEmpty()
+            MealOrigin.EDIT -> editItems.toList() != initialItems
+        }
+
+    val recentFoods: StateFlow<List<FoodItem>> = mealRepository.observeRecentFoods()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val favourites: StateFlow<List<FoodItem>> = mealRepository.observeFavourites()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Starting a photo/barcode meal from the log: it will be saved on [day]. */
+    fun prepare(day: LocalDate) {
+        reset()
+        origin = MealOrigin.PHOTO
+        targetDay = day
+        editingMealId = null
+    }
+
+    /** Typing foods in without a photo; saved on [day]. */
+    fun startManual(day: LocalDate) {
+        prepare(day)
+        origin = MealOrigin.MANUAL
+        _state.value = AnalysisState.Success(emptyList())
+    }
+
+    /** Editing a meal already in the log; Save replaces its foods. */
+    fun startEdit(meal: LoggedMeal) {
+        prepare(meal.loggedAt.atZone(ZoneId.systemDefault()).toLocalDate())
+        origin = MealOrigin.EDIT
+        editingMealId = meal.id
+        editItems.addAll(meal.foods.map { EditableFoodItem(key = nextKey++, original = it.item) })
+        initialItems = editItems.toList()
+        _state.value = AnalysisState.Success(meal.foods.map { it.item })
+    }
+
+    /** Adds a food with known nutrition (from recent foods or favourites). */
+    fun addFood(item: FoodItem) {
+        editItems.add(EditableFoodItem(key = nextKey++, original = item))
+    }
+
+    /** Adds a food by name and looks up its nutrition straight away (100 g / 100 mL to start). */
+    fun addNamedFood(name: String) {
+        val blank = FoodItem(name = "", grams = 100.0, calories = 0.0, proteinG = 0.0, carbsG = 0.0, fatG = 0.0,
+            source = NutritionSource.UNKNOWN)
+        val key = nextKey++
+        editItems.add(EditableFoodItem(key = key, original = blank, name = name.trim()))
+        commitName(key)
+    }
+
+    fun isFavourite(item: FoodItem) = favourites.value.any { it.name.equals(item.name.trim(), ignoreCase = true) }
+
+    fun toggleFavourite(item: FoodItem) {
+        val makeFavourite = !isFavourite(item)
+        viewModelScope.launch { mealRepository.setFavourite(item, makeFavourite) }
+    }
 
     var mode by mutableStateOf(ScanMode.MEAL)
         private set
@@ -163,14 +243,23 @@ class MealViewModel(
         if (i >= 0) editItems[i] = change(editItems[i])
     }
 
-    /** Saves the edited items, exactly as shown, as one meal; then clears the flow and calls [onSaved]. */
+    /**
+     * Saves the items exactly as shown: a new meal on [targetDay], or the edited meal's new contents.
+     * Then clears the flow and calls [onSaved].
+     */
     fun save(onSaved: () -> Unit) {
         if (!canSave) return
         isSaving = true
         saveError = null
+        val items = editItems.mapNotNull { it.current }
+        val mealId = editingMealId
         viewModelScope.launch {
             try {
-                mealRepository.saveMeal(editItems.mapNotNull { it.current })
+                if (origin == MealOrigin.EDIT && mealId != null) {
+                    mealRepository.replaceMeal(mealId, items)
+                } else {
+                    mealRepository.saveMeal(items, at = timeOn(targetDay))
+                }
                 reset()
                 onSaved()
             } catch (e: SQLiteException) {
@@ -193,6 +282,10 @@ class MealViewModel(
         saveError = null
         _state.value = AnalysisState.Idle
     }
+
+    /** Now if [day] is today; midday for a past day being filled in. */
+    private fun timeOn(day: LocalDate): ZonedDateTime =
+        if (day == LocalDate.now()) ZonedDateTime.now() else day.atTime(12, 0).atZone(ZoneId.systemDefault())
 
     override fun onCleared() {
         photo?.delete()

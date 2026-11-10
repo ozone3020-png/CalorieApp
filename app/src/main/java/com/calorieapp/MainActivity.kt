@@ -24,6 +24,7 @@ import com.calorieapp.ui.common.LocalEnergyUnit
 import com.calorieapp.ui.log.LogScreen
 import com.calorieapp.ui.log.LogViewModel
 import com.calorieapp.ui.meal.AnalysisState
+import com.calorieapp.ui.meal.MealOrigin
 import com.calorieapp.ui.meal.MealViewModel
 import com.calorieapp.ui.results.ResultsScreen
 import com.calorieapp.ui.settings.SettingsScreen
@@ -66,6 +67,11 @@ private fun CalorieNavHost() {
         nav.popBackStack(CameraRoute, inclusive = false)
     }
 
+    fun backToLog() {
+        meal.reset()
+        nav.popBackStack(LogRoute, inclusive = false)
+    }
+
     NavHost(nav, startDestination = LogRoute) {
         composable<LogRoute> {
             val state by log.state.collectAsStateWithLifecycle()
@@ -76,7 +82,18 @@ private fun CalorieNavHost() {
                 onPreviousDay = log::previousDay,
                 onNextDay = log::nextDay,
                 onPickDay = log::showDay,
-                onAddMeal = { nav.navigate(CameraRoute) },
+                onAddMeal = {
+                    meal.prepare(state.day)
+                    nav.navigate(CameraRoute)
+                },
+                onTypeFood = {
+                    meal.startManual(state.day)
+                    nav.navigate(ResultsRoute)
+                },
+                onEditMeal = {
+                    meal.startEdit(it)
+                    nav.navigate(ResultsRoute)
+                },
                 onOpenSettings = { nav.navigate(SettingsRoute) },
                 onDeleteMeal = { log.deleteMeal(it) },
                 onDeleteFood = { log.deleteFood(it) },
@@ -115,12 +132,18 @@ private fun CalorieNavHost() {
         }
         composable<ResultsRoute> {
             if (mealState !is AnalysisState.Success) {
-                // Nothing to edit (e.g. restored after the app was killed): start over.
-                LaunchedEffect(Unit) { backToCamera() }
+                // Nothing to edit (e.g. restored after the app was killed): back to the log.
+                LaunchedEffect(Unit) { backToLog() }
             } else {
                 val context = LocalContext.current
+                val recentFoods by meal.recentFoods.collectAsStateWithLifecycle()
+                val favourites by meal.favourites.collectAsStateWithLifecycle()
                 ResultsScreen(
+                    origin = meal.origin,
+                    hasUnsavedWork = meal.hasUnsavedWork,
                     items = meal.editItems,
+                    recentFoods = recentFoods,
+                    favourites = favourites,
                     canSave = meal.canSave,
                     hasPendingLookups = meal.hasPendingLookups,
                     isLookingUp = meal.isLookingUp,
@@ -132,14 +155,20 @@ private fun CalorieNavHost() {
                     onUnitToggle = meal::toggleUnit,
                     onRemove = meal::removeItem,
                     onUpdateNutrition = meal::updateNutrition,
+                    onAddFood = meal::addFood,
+                    onAddNamedFood = meal::addNamedFood,
+                    onToggleFavourite = meal::toggleFavourite,
                     onSave = {
+                        val edited = meal.origin == MealOrigin.EDIT
+                        val day = meal.targetDay
                         meal.save {
-                            Toast.makeText(context, "Meal saved", Toast.LENGTH_SHORT).show()
-                            log.showToday()
+                            Toast.makeText(context, if (edited) "Meal updated" else "Meal saved", Toast.LENGTH_SHORT).show()
+                            log.showDay(day)
                             nav.popBackStack(LogRoute, inclusive = false)
                         }
                     },
-                    onDiscard = ::backToCamera,
+                    // A photo meal goes back to the camera to retake; typed or edited meals go back to the log.
+                    onDiscard = { if (meal.origin == MealOrigin.PHOTO) backToCamera() else backToLog() },
                 )
             }
         }

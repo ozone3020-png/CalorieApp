@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Delete
@@ -38,6 +39,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -89,6 +91,8 @@ fun LogScreen(
     onNextDay: () -> Unit,
     onPickDay: (LocalDate) -> Unit,
     onAddMeal: () -> Unit,
+    onTypeFood: () -> Unit,
+    onEditMeal: (LoggedMeal) -> Unit,
     onOpenSettings: () -> Unit,
     onDeleteMeal: (LoggedMeal) -> Unit,
     onDeleteFood: (LoggedFood) -> Unit,
@@ -138,11 +142,17 @@ fun LogScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onAddMeal,
-                icon = { Icon(Icons.Filled.PhotoCamera, contentDescription = null) },
-                text = { Text("Add meal") },
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                SmallFloatingActionButton(onClick = onTypeFood) {
+                    Icon(Icons.Filled.Edit, contentDescription = "Type a food")
+                }
+                Spacer(Modifier.height(12.dp))
+                ExtendedFloatingActionButton(
+                    onClick = onAddMeal,
+                    icon = { Icon(Icons.Filled.PhotoCamera, contentDescription = null) },
+                    text = { Text("Add meal") },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
@@ -162,7 +172,7 @@ fun LogScreen(
                 item(key = "empty") { EmptyDay(state.isToday) }
             }
             items(state.meals, key = { it.id }) { meal ->
-                MealCard(meal, onDeleteMeal = { onDeleteMeal(meal) }, onDeleteFood = onDeleteFood)
+                MealCard(meal, onEdit = { onEditMeal(meal) }, onDeleteMeal = { onDeleteMeal(meal) }, onDeleteFood = onDeleteFood)
             }
         }
     }
@@ -240,10 +250,16 @@ private fun MacroBar(label: String, value: Double, goal: Double, color: Color) {
 }
 
 @Composable
-private fun MealCard(meal: LoggedMeal, onDeleteMeal: () -> Unit, onDeleteFood: (LoggedFood) -> Unit) {
+private fun MealCard(
+    meal: LoggedMeal,
+    onEdit: () -> Unit,
+    onDeleteMeal: () -> Unit,
+    onDeleteFood: (LoggedFood) -> Unit,
+) {
     val unit = LocalEnergyUnit.current
     val time = meal.loggedAt.atZone(ZoneId.systemDefault())
-    ElevatedCard(Modifier.fillMaxWidth()) {
+    // Tapping the card opens the meal for editing.
+    ElevatedCard(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -312,7 +328,11 @@ private fun EmptyDay(isToday: Boolean) {
         )
         Spacer(Modifier.height(12.dp))
         Text(
-            if (isToday) "Nothing logged yet today.\nTap Add meal to photograph your food." else "Nothing logged this day.",
+            if (isToday) {
+                "Nothing logged yet today.\nTap Add meal to photograph your food, or ✎ to type it in."
+            } else {
+                "Nothing logged this day.\nAnything you add now is logged on this day."
+            },
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

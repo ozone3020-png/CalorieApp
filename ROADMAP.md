@@ -35,9 +35,6 @@ no paid APIs, no Play Store fee.
 - Portion sizes are the photo model's guess, so the amount field needs checking.
 - Switching g ↔ mL relabels without rescaling (assumes ~1 g/mL).
 - The Worker URL is open; anyone with it could use up the free daily allowance.
-- Two energy drinks saved on 10 Nov carry wrong numbers (229 kcal sugared match for a zero-sugar can).
-  The matcher is fixed (sugar-free guard), but saved meals don't change. They can be fixed with
-  Phase 3's "edit saved meals" or deleted.
 - Meals saved before schema v2 have no source and show no tag.
 - There's no way to log a food without a photo, or to use an existing photo from the gallery.
 
@@ -71,10 +68,12 @@ no paid APIs, no Play Store fee.
       off the macros is replaced from them, both with a warning. Some records are simply wrong (e.g. Vegemite),
       so items are tagged "Open Food Facts"; label mode is the fallback. Scanner UI checked; a real scan not yet.
 
-### Phase 3 — Logging without photos
-- [ ] Add a food by typing name + amount (uses `/lookup`)
-- [ ] Edit saved meals (amounts, names, remove items)
-- [ ] Recent foods and favourites for one-tap re-logging
+### Phase 3 — Logging without photos ✅
+- [x] ✎ button on the log: Add food sheet. Type a food → lookup (AFCD → USDA → AI), or tap a recent/favourite
+- [x] Tap a meal in the log to edit it (amounts, names, add/remove foods); Save changes keeps its time
+- [x] Recent foods (latest version of each, most recently added first) and ★ favourites (DB v4)
+- [x] New meals go on the day being viewed (now for today, 12:00 for a past day), so missed days can be filled in
+- [x] Closing only asks to confirm when something would be lost
 
 ### Phase 4 — Choice of AI model
 - [ ] Settings choice: free Llama (Workers AI) vs Gemini API free tier (key as a Worker secret)

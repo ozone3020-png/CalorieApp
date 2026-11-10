@@ -20,6 +20,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -31,6 +32,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -56,6 +58,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
+import com.calorieapp.data.FoodItem
 import com.calorieapp.data.NutritionSource
 import com.calorieapp.data.NutritionTotals
 import com.calorieapp.data.totals
@@ -65,12 +68,17 @@ import com.calorieapp.ui.common.energyNumber
 import com.calorieapp.ui.common.energyText
 import com.calorieapp.ui.meal.EditableFoodItem
 import com.calorieapp.ui.meal.LookupState
+import com.calorieapp.ui.meal.MealOrigin
 
 /** Step 3: edit each item's name and weight, watch totals update, then save the meal. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResultsScreen(
+    origin: MealOrigin,
+    hasUnsavedWork: Boolean,
     items: List<EditableFoodItem>,
+    recentFoods: List<FoodItem>,
+    favourites: List<FoodItem>,
     canSave: Boolean,
     hasPendingLookups: Boolean,
     isLookingUp: Boolean,
@@ -82,18 +90,44 @@ fun ResultsScreen(
     onUnitToggle: (key: Long) -> Unit,
     onRemove: (key: Long) -> Unit,
     onUpdateNutrition: () -> Unit,
+    onAddFood: (FoodItem) -> Unit,
+    onAddNamedFood: (String) -> Unit,
+    onToggleFavourite: (FoodItem) -> Unit,
     onSave: () -> Unit,
     onDiscard: () -> Unit,
 ) {
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
+    // Typing foods in starts with the picker open; otherwise it opens from "Add food".
+    var showAddFood by rememberSaveable { mutableStateOf(origin == MealOrigin.MANUAL && items.isEmpty()) }
     val focusManager = LocalFocusManager.current
-    BackHandler(enabled = !isSaving) { confirmDiscard = true }
+    // Only ask before closing when something would be lost.
+    val close = { if (hasUnsavedWork) confirmDiscard = true else onDiscard() }
+    BackHandler(enabled = !isSaving) { close() }
+
+    if (showAddFood) {
+        AddFoodSheet(
+            recent = recentFoods,
+            favourites = favourites,
+            onPick = { onAddFood(it); showAddFood = false },
+            onLookUp = { onAddNamedFood(it); showAddFood = false },
+            onToggleFavourite = onToggleFavourite,
+            onDismiss = { showAddFood = false },
+        )
+    }
 
     if (confirmDiscard) {
         AlertDialog(
             onDismissRequest = { confirmDiscard = false },
-            title = { Text("Discard this meal?") },
-            text = { Text("The photo and results won't be saved.") },
+            title = { Text(if (origin == MealOrigin.EDIT) "Discard changes?" else "Discard this meal?") },
+            text = {
+                Text(
+                    when (origin) {
+                        MealOrigin.EDIT -> "The meal stays as it was."
+                        MealOrigin.MANUAL -> "These foods won't be saved."
+                        MealOrigin.PHOTO -> "The photo and results won't be saved."
+                    },
+                )
+            },
             confirmButton = {
                 TextButton(onClick = { confirmDiscard = false; onDiscard() }) { Text("Discard") }
             },
@@ -106,9 +140,17 @@ fun ResultsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Your meal") },
+                title = {
+                    Text(
+                        when (origin) {
+                            MealOrigin.PHOTO -> "Your meal"
+                            MealOrigin.MANUAL -> "Add food"
+                            MealOrigin.EDIT -> "Edit meal"
+                        },
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = { confirmDiscard = true }, enabled = !isSaving) {
+                    IconButton(onClick = close, enabled = !isSaving) {
                         Icon(Icons.Filled.Close, contentDescription = "Discard meal")
                     }
                 },
@@ -148,7 +190,7 @@ fun ResultsScreen(
                         if (isSaving) {
                             CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Save")
+                            Text(if (origin == MealOrigin.EDIT) "Save changes" else "Save")
                         }
                     }
                 }
@@ -156,12 +198,18 @@ fun ResultsScreen(
         },
     ) { padding ->
         if (items.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
+            Column(
+                Modifier.fillMaxSize().padding(padding).padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Text(
-                    "All items removed. Close to retake the photo.",
+                    if (origin == MealOrigin.MANUAL) "No foods yet." else "All items removed.",
                     textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.bodyLarge,
                 )
+                Spacer(Modifier.size(16.dp))
+                AddFoodButton(onClick = { showAddFood = true })
             }
         } else {
             LazyColumn(
@@ -187,6 +235,9 @@ fun ResultsScreen(
                         onDone = { focusManager.clearFocus() },
                     )
                 }
+                item(key = "add") {
+                    AddFoodButton(onClick = { focusManager.clearFocus(); showAddFood = true }, enabled = !isSaving)
+                }
                 item(key = "credits") {
                     Text(
                         "Nutrition data: Australian Food Composition Database – Release 3, © Food Standards " +
@@ -199,6 +250,15 @@ fun ResultsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AddFoodButton(onClick: () -> Unit, enabled: Boolean = true) {
+    OutlinedButton(onClick = onClick, enabled = enabled) {
+        Icon(Icons.Filled.Add, contentDescription = null)
+        Spacer(Modifier.width(8.dp))
+        Text("Add food")
     }
 }
 

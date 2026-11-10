@@ -115,4 +115,18 @@ class EditableFoodItemTest {
         val coke = FoodItem("Coca-Cola Original", 330.0, 140.0, 0.0, 35.0, 0.0, NutritionSource.OFF, "Open Food Facts: …", FoodUnit.MILLILITRES)
         assertFalse(EditableFoodItem(1, coke, name = "Coke").needsLookup)
     }
+
+    @Test fun `a typed-in food starts blank and needs a lookup`() {
+        val blank = FoodItem("", 100.0, 0.0, 0.0, 0.0, 0.0, NutritionSource.UNKNOWN)
+        val typed = EditableFoodItem(1, blank, name = "banana")
+        assertTrue(typed.needsLookup)
+        assertEquals(100.0, typed.lookupGrams, 1e-9)
+    }
+
+    @Test fun `a saved food opened for editing doesn't need a lookup until renamed`() {
+        val saved = FoodItem("mashed potatoes", 200.0, 150.0, 3.0, 30.0, 2.0, NutritionSource.UNKNOWN)
+        assertFalse(EditableFoodItem(1, saved).needsLookup)
+        assertEquals(75.0, EditableFoodItem(1, saved, gramsText = "100").current!!.calories, 1e-9)
+        assertTrue(EditableFoodItem(1, saved, name = "rice").needsLookup)
+    }
 }

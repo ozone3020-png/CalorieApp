@@ -1,5 +1,6 @@
 package com.calorieapp.data
 
+import com.calorieapp.data.local.FavouriteFoodEntity
 import com.calorieapp.data.local.FoodEntryEntity
 import com.calorieapp.data.local.MealDao
 import com.calorieapp.data.local.MealEntity
@@ -36,21 +37,42 @@ class MealRepository(private val dao: MealDao) {
             loggedAt = at.toInstant().toEpochMilli(),
             epochDay = at.toLocalDate().toEpochDay(),
         )
-        val entries = items.map {
-            FoodEntryEntity(
-                mealId = 0, // filled in by the DAO
-                name = it.name,
-                grams = it.grams,
-                calories = it.calories,
-                proteinG = it.proteinG,
-                carbsG = it.carbsG,
-                fatG = it.fatG,
-                source = it.source.name.lowercase(),
-                matchName = it.match,
-                unit = it.unit.wire,
+        return dao.insertMealWithEntries(meal, items.map { it.toEntry() })
+    }
+
+    /** Replaces the foods of an already-saved meal (it keeps its time and day). */
+    suspend fun replaceMeal(mealId: Long, items: List<FoodItem>) {
+        require(items.isNotEmpty()) { "A meal needs at least one item" }
+        dao.replaceEntries(mealId, items.map { it.toEntry() })
+    }
+
+    /** The latest version of each food logged recently, newest first. */
+    fun observeRecentFoods(limit: Int = 30): Flow<List<FoodItem>> =
+        dao.observeRecentFoods(limit).map { list -> list.map { it.toFoodItem() } }
+
+    fun observeFavourites(): Flow<List<FoodItem>> =
+        dao.observeFavourites().map { list -> list.map { it.toFoodItem() } }
+
+    /** Stars or un-stars a food (by name), remembering its amount and nutrition for one-tap logging. */
+    suspend fun setFavourite(item: FoodItem, favourite: Boolean) {
+        if (favourite) {
+            dao.insertFavourite(
+                FavouriteFoodEntity(
+                    name = item.name.trim(),
+                    grams = item.grams,
+                    unit = item.unit.wire,
+                    calories = item.calories,
+                    proteinG = item.proteinG,
+                    carbsG = item.carbsG,
+                    fatG = item.fatG,
+                    source = item.source.wireOrNull(),
+                    matchName = item.match,
+                    addedAt = System.currentTimeMillis(),
+                ),
             )
+        } else {
+            dao.deleteFavourite(item.name.trim())
         }
-        return dao.insertMealWithEntries(meal, entries)
     }
 
     /** Meals logged on [day], newest first; updates live as meals are added or deleted. */
@@ -82,21 +104,44 @@ class MealRepository(private val dao: MealDao) {
 private fun MealWithEntries.toLoggedMeal() = LoggedMeal(
     id = meal.id,
     loggedAt = Instant.ofEpochMilli(meal.loggedAt),
-    foods = entries.sortedBy { it.id }.map { e ->
-        LoggedFood(
-            id = e.id,
-            mealId = e.mealId,
-            item = FoodItem(
-                name = e.name,
-                grams = e.grams,
-                calories = e.calories,
-                proteinG = e.proteinG,
-                carbsG = e.carbsG,
-                fatG = e.fatG,
-                source = e.source?.let(NutritionSource::from) ?: NutritionSource.UNKNOWN,
-                match = e.matchName,
-                unit = FoodUnit.from(e.unit),
-            ),
-        )
-    },
+    foods = entries.sortedBy { it.id }.map { e -> LoggedFood(id = e.id, mealId = e.mealId, item = e.toFoodItem()) },
+)
+
+private fun NutritionSource.wireOrNull(): String? = if (this == NutritionSource.UNKNOWN) null else name.lowercase()
+
+private fun FoodItem.toEntry() = FoodEntryEntity(
+    mealId = 0, // filled in by the DAO
+    name = name,
+    grams = grams,
+    calories = calories,
+    proteinG = proteinG,
+    carbsG = carbsG,
+    fatG = fatG,
+    source = source.wireOrNull(),
+    matchName = match,
+    unit = unit.wire,
+)
+
+private fun FoodEntryEntity.toFoodItem() = FoodItem(
+    name = name,
+    grams = grams,
+    calories = calories,
+    proteinG = proteinG,
+    carbsG = carbsG,
+    fatG = fatG,
+    source = source?.let(NutritionSource::from) ?: NutritionSource.UNKNOWN,
+    match = matchName,
+    unit = FoodUnit.from(unit),
+)
+
+private fun FavouriteFoodEntity.toFoodItem() = FoodItem(
+    name = name,
+    grams = grams,
+    calories = calories,
+    proteinG = proteinG,
+    carbsG = carbsG,
+    fatG = fatG,
+    source = source?.let(NutritionSource::from) ?: NutritionSource.UNKNOWN,
+    match = matchName,
+    unit = FoodUnit.from(unit),
 )

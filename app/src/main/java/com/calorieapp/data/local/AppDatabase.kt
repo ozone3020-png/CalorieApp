@@ -12,6 +12,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
@@ -54,6 +55,22 @@ data class FoodEntryEntity(
     @ColumnInfo(defaultValue = "g") val unit: String = "g",
 )
 
+/** A food the user starred for one-tap logging (schema v4). Identified by name. */
+@Entity(tableName = "favourite_foods", indices = [Index(value = ["name"], unique = true)])
+data class FavouriteFoodEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val grams: Double,
+    val unit: String,
+    val calories: Double,
+    val proteinG: Double,
+    val carbsG: Double,
+    val fatG: Double,
+    val source: String?,
+    val matchName: String?,
+    val addedAt: Long,
+)
+
 /** A meal with its foods, loaded together. */
 data class MealWithEntries(
     @Embedded val meal: MealEntity,
@@ -78,6 +95,42 @@ abstract class MealDao {
     @Query("DELETE FROM food_entries WHERE id = :entryId")
     abstract suspend fun deleteEntry(entryId: Long)
 
+    /**
+     * The most recently added entry for each distinct food name (case-insensitive), most recently added
+     * first (by entry id, not meal time, so a back-dated meal still counts as recent). For one-tap re-logging.
+     */
+    @Query(
+        """
+        SELECT e.* FROM food_entries e
+        WHERE e.id IN (SELECT MAX(id) FROM food_entries GROUP BY lower(trim(name)))
+        ORDER BY e.id DESC
+        LIMIT :limit
+        """,
+    )
+    abstract fun observeRecentFoods(limit: Int): Flow<List<FoodEntryEntity>>
+
+    @Query("SELECT * FROM favourite_foods ORDER BY lower(name)")
+    abstract fun observeFavourites(): Flow<List<FavouriteFoodEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertFavourite(food: FavouriteFoodEntity)
+
+    @Query("DELETE FROM favourite_foods WHERE lower(name) = lower(:name)")
+    abstract suspend fun deleteFavourite(name: String)
+
+    @Query("SELECT COUNT(*) FROM favourite_foods WHERE lower(name) = lower(:name)")
+    abstract suspend fun isFavourite(name: String): Int
+
+    @Query("DELETE FROM food_entries WHERE mealId = :mealId")
+    protected abstract suspend fun deleteEntriesOf(mealId: Long)
+
+    /** Replaces a saved meal's foods (keeping its time); used when editing a meal from the log. */
+    @Transaction
+    open suspend fun replaceEntries(mealId: Long, entries: List<FoodEntryEntity>) {
+        deleteEntriesOf(mealId)
+        insertEntries(entries.map { it.copy(id = 0, mealId = mealId) })
+    }
+
     /** Puts back a deleted meal and/or foods with their original ids (for Undo). */
     @Transaction
     open suspend fun restore(meal: MealEntity?, entries: List<FoodEntryEntity>) {
@@ -101,11 +154,12 @@ abstract class MealDao {
 }
 
 @Database(
-    entities = [MealEntity::class, FoodEntryEntity::class],
-    version = 3,
+    entities = [MealEntity::class, FoodEntryEntity::class, FavouriteFoodEntity::class],
+    version = 4,
     autoMigrations = [
         AutoMigration(from = 1, to = 2), // v2: food_entries.source, matchName
         AutoMigration(from = 2, to = 3), // v3: food_entries.unit
+        AutoMigration(from = 3, to = 4), // v4: favourite_foods
     ],
 )
 abstract class AppDatabase : RoomDatabase() {
