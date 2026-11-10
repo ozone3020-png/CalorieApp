@@ -2,6 +2,7 @@ package com.calorieapp.data
 
 import com.calorieapp.data.remote.AnalyzeApi
 import com.calorieapp.data.remote.AnalyzeRequest
+import com.calorieapp.data.remote.BarcodeRequest
 import com.calorieapp.data.remote.ErrorResponse
 import com.calorieapp.data.remote.LookupRequest
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,12 @@ class AnalyzeRepository(
             .filter { it.name.isNotBlank() }
     }
 
+    /** A scanned barcode -> the product from Open Food Facts. */
+    suspend fun barcode(code: String): List<FoodItem> {
+        val api = api()
+        return call { api.barcode(BarcodeRequest(code)) }.items.map { it.toFoodItem() }
+    }
+
     /** Nutrition for [amount] [unit] of the food called [name] (AFCD, then USDA, then AI estimate). */
     suspend fun lookup(name: String, amount: Double, unit: FoodUnit, serverUrl: String? = null): FoodItem {
         val api = api(serverUrl)
@@ -80,6 +87,8 @@ class AnalyzeRepository(
         val detail = parsed?.detail.orEmpty()
         return when {
             parsed?.error == "unknown food" -> detail.ifEmpty { "That isn't a food I recognise." }
+            parsed?.error == "product not found" ->
+                "This product isn't in Open Food Facts yet. Switch to Label and photograph its nutrition panel."
             parsed?.error == "no label" ->
                 "Couldn't read a nutrition panel. Fill the frame with the panel, flat on and in focus."
             // Workers AI daily free allowance used up (error 3036 / "neurons" in the message).

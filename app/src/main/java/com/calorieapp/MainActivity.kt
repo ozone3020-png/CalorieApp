@@ -95,6 +95,10 @@ private fun CalorieNavHost() {
                     meal.analyze(file, mode)
                     nav.navigate(AnalyzeRoute)
                 },
+                onBarcode = { code ->
+                    meal.lookUpBarcode(code)
+                    nav.navigate(AnalyzeRoute)
+                },
             )
         }
         composable<AnalyzeRoute> {

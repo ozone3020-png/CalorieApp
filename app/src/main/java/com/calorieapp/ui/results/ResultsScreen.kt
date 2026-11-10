@@ -190,7 +190,7 @@ fun ResultsScreen(
                 item(key = "credits") {
                     Text(
                         "Nutrition data: Australian Food Composition Database – Release 3, © Food Standards " +
-                            "Australia New Zealand (CC BY-SA 3.0 AU); USDA FoodData Central. " +
+                            "Australia New Zealand (CC BY-SA 3.0 AU); USDA FoodData Central; Open Food Facts (ODbL). " +
                             "\"AI estimate\" items are approximate.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -309,7 +309,7 @@ private fun SourceLine(item: EditableFoodItem) {
                 style = style,
                 color = MaterialTheme.colorScheme.tertiary,
             )
-            item.original.source == NutritionSource.LABEL -> Column {
+            item.original.source == NutritionSource.LABEL || item.original.source == NutritionSource.OFF -> Column {
                 // match holds e.g. "Nutrition label: 12 kJ / 2.9 kcal per 100 mL, serving 500 mL"
                 Text(item.original.match.orEmpty(), style = style, color = muted)
                 item.original.warning?.let {

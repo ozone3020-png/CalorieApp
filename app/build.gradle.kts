@@ -76,6 +76,9 @@ dependencies {
 
     // Image display (handles EXIF rotation of captured JPEGs)
     implementation(libs.coil.compose)
+    // Barcode scanning via Google Play services: its own scanner screen, no camera permission needed
+    implementation(libs.play.services.code.scanner)
+
     // Settings (goals, energy unit, server URL)
     implementation(libs.androidx.datastore.preferences)
 

@@ -91,7 +91,13 @@ fun AnalyzeScreen(
                 else -> {
                     CircularProgressIndicator(color = Color.White)
                     Spacer(Modifier.height(20.dp))
-                    Text(if (mode == ScanMode.LABEL) "Reading the label…" else "Analysing your meal…", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        when (mode) {
+                            ScanMode.LABEL -> "Reading the label…"
+                            ScanMode.BARCODE -> "Looking up the product…"
+                            ScanMode.MEAL -> "Analysing your meal…"
+                        },
+                        color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "This usually takes 5–20 seconds",

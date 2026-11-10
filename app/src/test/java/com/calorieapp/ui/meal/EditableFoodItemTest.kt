@@ -110,4 +110,9 @@ class EditableFoodItemTest {
         assertEquals(14.0, renamed.current!!.calories, 1e-9)
         assertEquals(5.6, EditableFoodItem(1, can, gramsText = "200").current!!.calories, 1e-9)
     }
+
+    @Test fun `renaming a barcode item keeps its numbers`() {
+        val coke = FoodItem("Coca-Cola Original", 330.0, 140.0, 0.0, 35.0, 0.0, NutritionSource.OFF, "Open Food Facts: …", FoodUnit.MILLILITRES)
+        assertFalse(EditableFoodItem(1, coke, name = "Coke").needsLookup)
+    }
 }

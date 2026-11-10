@@ -174,6 +174,8 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                         "• Food Standards Australia New Zealand (2025). Australian Food Composition Database – " +
                         "Release 3. Licensed by FSANZ under a licence based on CC BY-SA 3.0 AU.\n" +
                         "• U.S. Department of Agriculture, FoodData Central (public domain).\n" +
+                        "• Barcodes: Open Food Facts (openfoodfacts.org), Open Database License. Crowd-sourced: " +
+                        "check numbers against the package.\n" +
                         "• Foods found in neither are estimated by an AI model (Llama 4 Scout via Cloudflare " +
                         "Workers AI) and marked \"AI estimate\".",
                     style = MaterialTheme.typography.bodySmall,

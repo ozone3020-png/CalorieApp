@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -70,6 +71,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.calorieapp.data.ScanMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -84,6 +88,7 @@ import java.io.IOException
 @Composable
 fun CameraScreen(
     onPhotoConfirmed: (File, ScanMode) -> Unit,
+    onBarcode: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -121,6 +126,21 @@ fun CameraScreen(
             }
         }
     }
+    // Google's code scanner shows its own camera screen; it needs no permission and works on product barcodes.
+    val scanBarcode = {
+        GmsBarcodeScanning.getClient(
+            context,
+            GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_EAN_13, Barcode.FORMAT_EAN_8, Barcode.FORMAT_UPC_A, Barcode.FORMAT_UPC_E)
+                .enableAutoZoom()
+                .build(),
+        ).startScan()
+            .addOnSuccessListener { barcode -> barcode.rawValue?.let(onBarcode) }
+            .addOnFailureListener { e ->
+                Toast.makeText(context, "Barcode scanner unavailable: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        Unit
+    }
     val pickFromGallery = {
         galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
@@ -138,6 +158,7 @@ fun CameraScreen(
                 mode = mode,
                 onCaptured = { photoPath = it.absolutePath },
                 onPickFromGallery = pickFromGallery,
+                onScanBarcode = scanBarcode,
             )
 
             else -> PhotoReview(
@@ -187,7 +208,12 @@ private fun ModeSwitch(mode: ScanMode, onModeChange: (ScanMode) -> Unit, modifie
 }
 
 @Composable
-private fun CameraCapture(mode: ScanMode, onCaptured: (File) -> Unit, onPickFromGallery: () -> Unit) {
+private fun CameraCapture(
+    mode: ScanMode,
+    onCaptured: (File) -> Unit,
+    onPickFromGallery: () -> Unit,
+    onScanBarcode: () -> Unit,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val controller = remember {
@@ -243,6 +269,13 @@ private fun CameraCapture(mode: ScanMode, onCaptured: (File) -> Unit, onPickFrom
                 modifier = Modifier.align(Alignment.CenterStart).padding(start = 40.dp).size(52.dp),
             ) {
                 Icon(Icons.Filled.PhotoLibrary, contentDescription = "Choose from gallery")
+            }
+            FilledTonalIconButton(
+                onClick = onScanBarcode,
+                enabled = !capturing,
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 40.dp).size(52.dp),
+            ) {
+                Icon(Icons.Filled.QrCodeScanner, contentDescription = "Scan a barcode")
             }
             FilledIconButton(
                 onClick = {

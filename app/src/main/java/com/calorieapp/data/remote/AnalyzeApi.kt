@@ -13,6 +13,10 @@ interface AnalyzeApi {
     @POST("analyze")
     suspend fun analyze(@Body request: AnalyzeRequest): AnalyzeResponse
 
+    /** Barcode -> the product from Open Food Facts. */
+    @POST("barcode")
+    suspend fun barcode(@Body request: BarcodeRequest): AnalyzeResponse
+
     /** Food name + weight -> nutrition (used when the user renames an item). */
     @POST("lookup")
     suspend fun lookup(@Body request: LookupRequest): LookupResponse
@@ -28,6 +32,9 @@ data class AnalyzeRequest(
 
 @Serializable
 data class AnalyzeResponse(val items: List<FoodItemDto> = emptyList())
+
+@Serializable
+data class BarcodeRequest(val code: String)
 
 @Serializable
 data class LookupRequest(val name: String, val grams: Double, val unit: String = "g")

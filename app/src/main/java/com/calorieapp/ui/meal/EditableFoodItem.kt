@@ -33,11 +33,11 @@ data class EditableFoodItem(
     val isValid get() = isNameValid && isGramsValid
 
     /**
-     * True when the typed name differs from the food the nutrition belongs to. Label items never need a
-     * lookup: their numbers come from the package itself, and the name read off it is often just a slogan.
+     * True when the typed name differs from the food the nutrition belongs to. Label and barcode items never
+     * need a lookup: their numbers belong to that exact product, whatever the user calls it.
      */
     val needsLookup
-        get() = original.source != NutritionSource.LABEL &&
+        get() = original.source != NutritionSource.LABEL && original.source != NutritionSource.OFF &&
             isNameValid && !name.trim().equals(original.name.trim(), ignoreCase = true)
 
     /** Weight to look a renamed food up at: the typed weight, else the original, else 100 g. */

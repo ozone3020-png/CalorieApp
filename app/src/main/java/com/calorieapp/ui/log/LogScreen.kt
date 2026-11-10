@@ -369,6 +369,7 @@ private fun sourceTag(source: NutritionSource) = when (source) {
     NutritionSource.AI -> "AI est."
     NutritionSource.UNKNOWN -> ""
     NutritionSource.LABEL -> "Label"
+    NutritionSource.OFF -> "OFF"
     else -> source.label
 }
 

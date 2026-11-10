@@ -9,6 +9,9 @@ enum class NutritionSource(val label: String) {
     /** Read from the product's nutrition information panel. */
     LABEL("Label"),
 
+    /** Open Food Facts, looked up by barcode (crowd-sourced). */
+    OFF("Open Food Facts"),
+
     /** Saved before sources were recorded (database v1). */
     UNKNOWN("");
 
@@ -17,6 +20,7 @@ enum class NutritionSource(val label: String) {
             "afcd" -> AFCD
             "usda" -> USDA
             "label" -> LABEL
+            "off" -> OFF
             else -> AI
         }
     }
@@ -26,6 +30,9 @@ enum class NutritionSource(val label: String) {
 enum class ScanMode(val wire: String) {
     MEAL("meal"),
     LABEL("label"),
+
+    /** Not a photo: a scanned barcode looked up in Open Food Facts. */
+    BARCODE("barcode"),
 }
 
 /** Unit of an item's amount. Drinks are measured in millilitres. */

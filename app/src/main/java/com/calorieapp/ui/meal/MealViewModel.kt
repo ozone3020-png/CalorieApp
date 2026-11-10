@@ -76,19 +76,32 @@ class MealViewModel(
     var mode by mutableStateOf(ScanMode.MEAL)
         private set
 
+    private var barcode: String? = null
+
     fun analyze(file: File, mode: ScanMode) {
         photo = file
+        barcode = null
         this.mode = mode
         retry()
     }
 
+    fun lookUpBarcode(code: String) {
+        photo?.delete()
+        photo = null
+        barcode = code
+        mode = ScanMode.BARCODE
+        retry()
+    }
+
     fun retry() {
-        val file = photo ?: return
+        val code = barcode
+        val file = photo
+        if (code == null && file == null) return
         job?.cancel()
         _state.value = AnalysisState.Loading
         job = viewModelScope.launch {
             _state.value = try {
-                val items = analyzeRepository.analyze(file, mode)
+                val items = if (code != null) analyzeRepository.barcode(code) else analyzeRepository.analyze(file!!, mode)
                 if (items.isEmpty()) {
                     AnalysisState.Error("No food found in this photo. Try a closer, well-lit shot.", canRetry = false)
                 } else {
@@ -175,6 +188,7 @@ class MealViewModel(
         lookupJobs.clear()
         photo?.delete()
         photo = null
+        barcode = null
         editItems.clear()
         saveError = null
         _state.value = AnalysisState.Idle

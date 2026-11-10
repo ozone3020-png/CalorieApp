@@ -1,6 +1,8 @@
 // POST /analyze { image: "<base64 jpeg>", mime_type?: "image/jpeg" }
 //   -> { items: [{ name, grams, calories, protein_g, carbs_g, fat_g, source, match }] }
 //   with mode: "label" -> reads a nutrition information panel instead: one item, source "label", maybe a `warning`
+// POST /barcode { code: "9300675024235" } -> { items: [one product] }, source "off" (Open Food Facts), maybe a `warning`;
+//   404 "product not found" when Open Food Facts doesn't have it
 // POST /lookup  { name: "rice", grams: 180, unit?: "g" | "ml" }
 //   -> { item: { name, grams, calories, protein_g, carbs_g, fat_g, source, match } }
 //
@@ -8,6 +10,7 @@
 import { num, parseJson, runModel } from "./model.js";
 import { resolveNutrition, UnknownFoodError } from "./nutrition.js";
 import { LABEL_PROMPT, labelToItem } from "./label.js";
+import { lookupBarcode } from "./barcode.js";
 
 const VISION_PROMPT = `You identify food in meal photos. List each distinct food item.
 For each item:
@@ -30,7 +33,7 @@ const MAX_ITEMS = 12;
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
-    const route = { "/analyze": analyze, "/lookup": lookup }[pathname];
+    const route = { "/analyze": analyze, "/lookup": lookup, "/barcode": barcode }[pathname];
     if (!route) return json({ error: "not found" }, 404);
     if (request.method !== "POST") return json({ error: "use POST" }, 405);
 
@@ -101,6 +104,19 @@ async function analyzeLabel(body, env, image, mime) {
     return json({ error: "no label", detail: "Couldn't read a nutrition panel in this photo.", ...debug }, 422);
   }
   return json({ items: [item], ...debug });
+}
+
+async function barcode(body) {
+  const code = typeof body.code === "string" ? body.code.trim() : "";
+  if (!/^\d{8,14}$/.test(code)) return json({ error: "'code' must be an 8–14 digit barcode" }, 400);
+  let item;
+  try {
+    item = await lookupBarcode(code);
+  } catch (err) {
+    return json({ error: "barcode lookup failed", detail: String(err) }, 502);
+  }
+  if (!item) return json({ error: "product not found", detail: `Barcode ${code} isn't in Open Food Facts.` }, 404);
+  return json({ items: [item] });
 }
 
 async function lookup(body, env) {

@@ -65,8 +65,11 @@ no paid APIs, no Play Store fee.
         (1024 px misread sugars); Gemma 3 isn't available to this account. Kept Llama 4 Scout, labels
         upload at 1600 px. Renaming a label item keeps the label's numbers. More label photos would help
         confirm the choice.
-- [ ] **Barcode scanning**: ML Kit (on-device, free) + Open Food Facts (free, no key) for packaged items;
-      label mode as fallback when a product isn't listed
+- [x] **Barcode scanning**: Google code scanner (Play services, no permission) + Open Food Facts via the
+      Worker's `/barcode`. Drinks ≤ 750 mL default to the whole can/bottle, other foods to one serving (or 100 g).
+      OFF is crowd-sourced: contradictory kJ/kcal resolve to whichever matches the macros, and energy that's way
+      off the macros is replaced from them, both with a warning. Some records are simply wrong (e.g. Vegemite),
+      so items are tagged "Open Food Facts"; label mode is the fallback. Scanner UI checked; a real scan not yet.
 
 ### Phase 3 — Logging without photos
 - [ ] Add a food by typing name + amount (uses `/lookup`)
