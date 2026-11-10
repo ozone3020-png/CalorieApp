@@ -17,6 +17,8 @@ import androidx.room.Room
 import com.calorieapp.data.AnalyzeRepository
 import com.calorieapp.data.BackupRepository
 import com.calorieapp.data.MealRepository
+import com.calorieapp.data.sync.SyncRepository
+import kotlinx.coroutines.flow.Flow
 import com.calorieapp.data.SettingsRepository
 import com.calorieapp.data.normalizeServerUrl
 import com.calorieapp.data.local.AppDatabase
@@ -40,6 +42,11 @@ class CalorieApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Sync: once at start, then a few seconds after any change to the log (when sync is turned on).
+        appScope.launch {
+            container.syncRepository.syncNow()
+            container.localChanges.drop(1).debounce(3_000).collect { container.syncRepository.syncNow() }
+        }
         // Keep the home-screen widget current: refresh it whenever today's log or the settings change.
         appScope.launch {
             combine(container.mealRepository.observeDay(LocalDate.now()), container.settingsRepository.settings) { m, s -> m to s }
@@ -52,7 +59,9 @@ class CalorieApplication : Application() {
 
 /** Hand-rolled dependency container. */
 class AppContainer(context: Context) {
-    private val database = Room.databaseBuilder(context, AppDatabase::class.java, "calorie.db").build()
+    private val database = Room.databaseBuilder(context, AppDatabase::class.java, "calorie.db")
+        .addMigrations(AppDatabase.MIGRATION_4_5)
+        .build()
 
     val mealRepository = MealRepository(database.mealDao())
 
@@ -106,6 +115,15 @@ class AppContainer(context: Context) {
             .build()
             .create(AnalyzeApi::class.java)
     }
+
+    val syncRepository = SyncRepository(
+        dao = database.mealDao(),
+        settings = settingsRepository,
+        api = { apiFor(settingsRepository.settings.first().serverUrl ?: defaultServerUrl) },
+    )
+
+    /** Emits whenever something syncable changes in the log (meals, favourites, deletions). */
+    val localChanges: Flow<Long> = database.mealDao().observeChangeMarker()
 
     val analyzeRepository = AnalyzeRepository(
         apiFor = ::apiFor,

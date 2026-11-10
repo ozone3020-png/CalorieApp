@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -49,12 +50,23 @@ data class Goals(
     }
 }
 
+/** Sync state on this phone. [key] is the user's sync key (their "account"); null = sync off. */
+data class SyncPrefs(
+    val key: String,
+    /** Highest server revision already applied here. */
+    val lastRev: Long = 0,
+    /** Local changes made after this time haven't been sent yet. */
+    val lastPushAt: Long = 0,
+    val lastSyncedAt: Long? = null,
+)
+
 data class UserSettings(
     val energyUnit: EnergyUnit = EnergyUnit.KCAL,
     val goals: Goals = Goals.AU_REFERENCE,
     /** Overrides the built-in Worker URL when set (e.g. a friend's own Worker). */
     val serverUrl: String? = null,
     val aiProvider: AiProvider = AiProvider.WORKERS_AI,
+    val sync: SyncPrefs? = null,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -66,6 +78,20 @@ class SettingsRepository(private val context: Context) {
     suspend fun setEnergyUnit(unit: EnergyUnit) = context.dataStore.edit { it[ENERGY_UNIT] = unit.name }
 
     suspend fun setAiProvider(provider: AiProvider) = context.dataStore.edit { it[AI_PROVIDER] = provider.wire }
+
+    /** Turns sync on with [key] from scratch (everything here gets sent, everything there fetched), or off (null). */
+    suspend fun setSyncKey(key: String?) = context.dataStore.edit {
+        if (key == null) it.remove(SYNC_KEY) else it[SYNC_KEY] = key
+        it.remove(SYNC_LAST_REV)
+        it.remove(SYNC_LAST_PUSH_AT)
+        it.remove(SYNC_LAST_SYNCED_AT)
+    }
+
+    suspend fun setSyncProgress(lastRev: Long, lastPushAt: Long, syncedAt: Long) = context.dataStore.edit {
+        it[SYNC_LAST_REV] = lastRev
+        it[SYNC_LAST_PUSH_AT] = lastPushAt
+        it[SYNC_LAST_SYNCED_AT] = syncedAt
+    }
 
     suspend fun setGoals(goals: Goals) = context.dataStore.edit {
         it[GOAL_KCAL] = goals.kcal
@@ -93,6 +119,14 @@ class SettingsRepository(private val context: Context) {
             ),
             serverUrl = this[SERVER_URL],
             aiProvider = AiProvider.from(this[AI_PROVIDER]) ?: AiProvider.WORKERS_AI,
+            sync = this[SYNC_KEY]?.let { key ->
+                SyncPrefs(
+                    key = key,
+                    lastRev = this[SYNC_LAST_REV] ?: 0,
+                    lastPushAt = this[SYNC_LAST_PUSH_AT] ?: 0,
+                    lastSyncedAt = this[SYNC_LAST_SYNCED_AT],
+                )
+            },
         )
     }
 
@@ -104,6 +138,10 @@ class SettingsRepository(private val context: Context) {
         val GOAL_FAT = doublePreferencesKey("goal_fat_g")
         val SERVER_URL = stringPreferencesKey("server_url")
         val AI_PROVIDER = stringPreferencesKey("ai_provider")
+        val SYNC_KEY = stringPreferencesKey("sync_key")
+        val SYNC_LAST_REV = longPreferencesKey("sync_last_rev")
+        val SYNC_LAST_PUSH_AT = longPreferencesKey("sync_last_push_at")
+        val SYNC_LAST_SYNCED_AT = longPreferencesKey("sync_last_synced_at")
     }
 }
 

@@ -12,6 +12,12 @@ name = "LIMITER"
 namespace_id = "1001"
 simple = { limit = 20, period = 60 }
 
+# Cloud sync storage (free D1). Schema: schema.sql.
+[[d1_databases]]
+binding = "DB"
+database_name = "calorie-sync"
+database_id = "22d22a24-0889-406a-8136-03c97c7e9767"
+
 [vars]
 # Open-weight vision model. Alternatives on Workers AI:
 #   @cf/mistralai/mistral-small-3.1-24b-instruct

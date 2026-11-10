@@ -3,6 +3,7 @@
 //   with mode: "label" -> reads a nutrition information panel instead: one item, source "label", maybe a `warning`
 // POST /barcode { code: "9300675024235" } -> { items: [one product] }, source "off" (Open Food Facts), maybe a `warning`;
 //   404 "product not found" when Open Food Facts doesn't have it
+// POST /sync    encrypted meal/favourite sync between a user's phones (see sync.js)
 // POST /lookup  { name: "rice", grams: 180, unit?: "g" | "ml" }
 //   -> { item: { name, grams, calories, protein_g, carbs_g, fat_g, source, match } }
 //
@@ -14,6 +15,7 @@ import { makeAi, num, parseJson, PROVIDERS } from "./model.js";
 import { resolveNutrition, UnknownFoodError } from "./nutrition.js";
 import { LABEL_PROMPT, labelToItem } from "./label.js";
 import { lookupBarcode } from "./barcode.js";
+import { sync } from "./sync.js";
 
 const VISION_PROMPT = `You identify food in meal photos. List each distinct food item.
 For each item:
@@ -45,7 +47,7 @@ export default {
       return json((data.models ?? []).filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
         .map((m) => m.name));
     }
-    const route = { "/analyze": analyze, "/lookup": lookup, "/barcode": barcode }[pathname];
+    const route = { "/analyze": analyze, "/lookup": lookup, "/barcode": barcode, "/sync": syncRoute }[pathname];
     if (!route) return json({ error: "not found" }, 404);
     if (request.method !== "POST") return json({ error: "use POST" }, 405);
 
@@ -130,6 +132,10 @@ async function analyzeLabel(body, ai, env, image, mime) {
     return json({ error: "no label", detail: "Couldn't read a nutrition panel in this photo.", ...debug }, 422);
   }
   return json({ items: [item], ...aiInfo(ai), ...debug });
+}
+
+function syncRoute(body, env) {
+  return sync(body, env, json);
 }
 
 async function barcode(body) {

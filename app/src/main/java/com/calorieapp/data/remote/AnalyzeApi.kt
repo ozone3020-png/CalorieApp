@@ -17,6 +17,10 @@ interface AnalyzeApi {
     @POST("barcode")
     suspend fun barcode(@Body request: BarcodeRequest): AnalyzeResponse
 
+    /** Encrypted sync between the user's phones: send local changes, get everything newer than [SyncRequest.since]. */
+    @POST("sync")
+    suspend fun sync(@Body request: SyncRequest): SyncResponse
+
     /** Food name + weight -> nutrition (used when the user renames an item). */
     @POST("lookup")
     suspend fun lookup(@Body request: LookupRequest): LookupResponse
@@ -43,6 +47,32 @@ data class AnalyzeResponse(
 
 @Serializable
 data class BarcodeRequest(val code: String)
+
+@Serializable
+data class SyncChange(
+    val kind: String,
+    val id: String,
+    @SerialName("updated_at") val updatedAt: Long,
+    val deleted: Boolean = false,
+    /** Encrypted on the phone; null for deletions. */
+    val data: String? = null,
+)
+
+@Serializable
+data class SyncRequest(val account: String, val since: Long, val changes: List<SyncChange>)
+
+@Serializable
+data class SyncRecord(
+    val kind: String,
+    val id: String,
+    @SerialName("updated_at") val updatedAt: Long,
+    val deleted: Boolean = false,
+    val data: String? = null,
+    val rev: Long,
+)
+
+@Serializable
+data class SyncResponse(val records: List<SyncRecord> = emptyList(), val rev: Long = 0, val more: Boolean = false)
 
 @Serializable
 data class LookupRequest(val name: String, val grams: Double, val unit: String = "g", val provider: String = "workers-ai")

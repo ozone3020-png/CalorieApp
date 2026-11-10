@@ -98,7 +98,7 @@ class MealRepository(private val dao: MealDao) {
 
     suspend fun deleteMeal(mealId: Long): DeletedFromLog? {
         val meal = dao.getMeal(mealId) ?: return null
-        dao.deleteMeal(mealId)
+        dao.deleteMeal(meal.meal)
         return DeletedFromLog(meal.meal, meal.entries)
     }
 
@@ -107,10 +107,10 @@ class MealRepository(private val dao: MealDao) {
         val meal = dao.getMeal(food.mealId) ?: return null
         val entry = meal.entries.firstOrNull { it.id == food.id } ?: return null
         return if (meal.entries.size == 1) {
-            dao.deleteMeal(meal.meal.id)
+            dao.deleteMeal(meal.meal)
             DeletedFromLog(meal.meal, listOf(entry))
         } else {
-            dao.deleteEntry(entry.id)
+            dao.deleteEntry(entry)
             DeletedFromLog(null, listOf(entry))
         }
     }

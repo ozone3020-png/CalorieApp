@@ -21,7 +21,15 @@ import com.calorieapp.data.SettingsRepository
 import com.calorieapp.data.UserSettings
 import com.calorieapp.data.normalizeServerUrl
 import com.calorieapp.ui.common.fmt
+import com.calorieapp.data.SyncPrefs
+import com.calorieapp.data.sync.SyncCrypto
+import com.calorieapp.data.sync.SyncRepository
+import com.calorieapp.data.sync.SyncStatus
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** Text fields for the goals, kept as typed so editing feels natural; energy is in the chosen unit. */
@@ -60,8 +68,28 @@ class SettingsViewModel(
     private val settings: SettingsRepository,
     private val analyze: AnalyzeRepository,
     private val backup: BackupRepository,
+    private val syncRepo: SyncRepository,
     val defaultServerUrl: String,
 ) : ViewModel() {
+
+    /** Sync on this phone (null = off), live. */
+    val syncPrefs: StateFlow<SyncPrefs?> = settings.settings.map { it.sync }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val syncStatus: StateFlow<SyncStatus> = syncRepo.status
+
+    fun turnOnSync() = viewModelScope.launch { syncRepo.enable() }
+
+    /** Links this phone to the account of a key copied from another phone. Returns false if it isn't a key. */
+    fun linkSync(key: String): Boolean {
+        val trimmed = key.trim()
+        if (!SyncCrypto.isValidKey(trimmed)) return false
+        viewModelScope.launch { syncRepo.enable(trimmed) }
+        return true
+    }
+
+    fun syncNow() = viewModelScope.launch { syncRepo.syncNow() }
+
+    fun turnOffSync() = viewModelScope.launch { syncRepo.disable() }
 
     /** Result of the last export / backup / restore, shown under the buttons. */
     var dataMessage by mutableStateOf<String?>(null)
@@ -212,7 +240,9 @@ class SettingsViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val c = (this[APPLICATION_KEY] as CalorieApplication).container
-                SettingsViewModel(c.settingsRepository, c.analyzeRepository, c.backupRepository, c.defaultServerUrl)
+                SettingsViewModel(
+                    c.settingsRepository, c.analyzeRepository, c.backupRepository, c.syncRepository, c.defaultServerUrl,
+                )
             }
         }
     }

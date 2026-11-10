@@ -1,6 +1,10 @@
 package com.calorieapp.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -199,6 +203,10 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                 }
             }
 
+            Section("Sync across devices") {
+                SyncSection(vm)
+            }
+
             Section("Your data") {
                 DataSection(vm)
             }
@@ -236,6 +244,98 @@ private fun isChanged(vm: SettingsViewModel): Boolean {
         vm.serverUrl.trim() != s.serverUrl.orEmpty() ||
         goals == null ||
         GoalFields.from(goals, vm.energyUnit) != GoalFields.from(s.goals, vm.energyUnit)
+}
+
+@Composable
+private fun SyncSection(vm: SettingsViewModel) {
+    val prefs by vm.syncPrefs.collectAsStateWithLifecycle()
+    val status by vm.syncStatus.collectAsStateWithLifecycle()
+    val clipboard = LocalClipboardManager.current
+    var linkKey by rememberSaveable { mutableStateOf("") }
+    var linkError by rememberSaveable { mutableStateOf(false) }
+    var showKey by rememberSaveable { mutableStateOf(false) }
+    var confirmOff by rememberSaveable { mutableStateOf(false) }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+
+    if (confirmOff) {
+        AlertDialog(
+            onDismissRequest = { confirmOff = false },
+            title = { Text("Turn off sync on this phone?") },
+            text = {
+                Text(
+                    "Your log stays on this phone, and the synced copy stays for your other phones. " +
+                        "To turn sync back on with the same data, you'll need your sync key, so copy it first.",
+                )
+            },
+            confirmButton = { TextButton(onClick = { confirmOff = false; vm.turnOffSync() }) { Text("Turn off") } },
+            dismissButton = { TextButton(onClick = { confirmOff = false }) { Text("Cancel") } },
+        )
+    }
+
+    val current = prefs
+    if (current == null) {
+        Text(
+            "Keep your log on more than one phone. Your log is encrypted on the phone before it's uploaded, " +
+                "so the server can't read it. Your sync key is your account: there's no password or email.",
+            style = MaterialTheme.typography.bodySmall,
+            color = muted,
+        )
+        Button(onClick = vm::turnOnSync, enabled = !status.running) { Text("Turn on sync") }
+        Text("Already syncing on another phone? Paste its sync key:", style = MaterialTheme.typography.bodySmall, color = muted)
+        OutlinedTextField(
+            value = linkKey,
+            onValueChange = { linkKey = it; linkError = false },
+            label = { Text("Sync key") },
+            singleLine = true,
+            isError = linkError,
+            supportingText = if (linkError) ({ Text("That isn't a sync key. It's 43 letters, numbers, - and _.") }) else null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedButton(
+            onClick = { linkError = !vm.linkSync(linkKey) },
+            enabled = linkKey.isNotBlank() && !status.running,
+        ) { Text("Link this phone") }
+    } else {
+        Text(
+            when {
+                status.running -> "Syncing…"
+                status.error != null -> status.error!!
+                current.lastSyncedAt != null -> "Synced ${syncedAgo(current.lastSyncedAt)}."
+                else -> "Sync is on."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (status.error != null && !status.running) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        )
+        Text("Your sync key", style = MaterialTheme.typography.labelLarge)
+        Text(
+            if (showKey) current.key else "•".repeat(12) + current.key.takeLast(4),
+            style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { showKey = !showKey }) { Text(if (showKey) "Hide" else "Show") }
+            TextButton(onClick = { clipboard.setText(AnnotatedString(current.key)) }) { Text("Copy") }
+        }
+        Text(
+            "Enter this key on another phone to sync it. Anyone with the key can see your log, so keep it private. " +
+                "Save it somewhere safe (e.g. a password manager): it's the only way back to your synced log.",
+            style = MaterialTheme.typography.bodySmall,
+            color = muted,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = vm::syncNow, enabled = !status.running) { Text("Sync now") }
+            OutlinedButton(onClick = { confirmOff = true }, enabled = !status.running) { Text("Turn off") }
+        }
+    }
+}
+
+private fun syncedAgo(at: Long): String {
+    val minutes = (System.currentTimeMillis() - at) / 60_000
+    return when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "$minutes min ago"
+        minutes < 24 * 60 -> "${minutes / 60} h ago"
+        else -> "${minutes / (24 * 60)} days ago"
+    }
 }
 
 @Composable
