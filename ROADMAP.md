@@ -85,9 +85,12 @@ no paid APIs, no Play Store fee.
       vs Llama 989 kcal (300 g pasta, 50 g parmesan); both read the Monster label exactly; Gemini 3–5x faster.
 
 ### Phase 5 — Sharing with friends
-- [ ] Signed release APK to send directly (no Play Store)
-- [ ] Guide for a friend to deploy their own free Worker + set Server URL
-- [ ] Protect the Worker: app token and per-device rate limiting
+- [x] Signed release APK (key in ~/.android, passwords in gitignored keystore.properties; shrunk to ~3.4 MB).
+      `staging` build type = the release build installable alongside, for testing (checked on the Pixel)
+- [x] SHARING.md: building, installing on a friend's phone, their own Worker, how the Worker is protected
+- [x] Worker protection: `APP_TOKEN` secret checked against the app's X-App-Token (off until the secret is
+      set); ~20 requests/min per device via Cloudflare's rate limiting binding
+- [ ] Owner: set the APP_TOKEN secret; back up the signing key and keystore.properties
 
 ### Phase 6 — Optional
 - [ ] Weekly / monthly charts

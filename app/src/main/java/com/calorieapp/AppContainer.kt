@@ -17,6 +17,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.ConcurrentHashMap
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 class CalorieApplication : Application() {
@@ -40,7 +41,21 @@ class AppContainer(context: Context) {
     /** The Worker URL built into this APK (gradle.properties WORKER_URL); Settings can override it. */
     val defaultServerUrl: String = normalizeServerUrl(BuildConfig.WORKER_URL) ?: BuildConfig.WORKER_URL
 
+    /** Random id for this install, so the Worker can rate-limit per device. Not linked to any account. */
+    private val deviceId: String = context.getSharedPreferences("device", Context.MODE_PRIVATE).let { prefs ->
+        prefs.getString("id", null) ?: UUID.randomUUID().toString().also { prefs.edit().putString("id", it).apply() }
+    }
+
     private val okHttp = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("X-App-Token", BuildConfig.APP_TOKEN)
+                    .header("X-Device-Id", deviceId)
+                    .header("User-Agent", "CalorieApp/${BuildConfig.VERSION_NAME}")
+                    .build(),
+            )
+        }
         .connectTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .readTimeout(90, TimeUnit.SECONDS) // vision models can take a while on a cold start

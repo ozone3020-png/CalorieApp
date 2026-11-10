@@ -94,6 +94,9 @@ class AnalyzeRepository(
         val parsed = body?.let { runCatching { json.decodeFromString<ErrorResponse>(it) }.getOrNull() }
         val detail = parsed?.detail.orEmpty()
         return when {
+            parsed?.error == "unauthorized" ->
+                "This server didn't accept the app. If you set your own server in Settings, check its address."
+            parsed?.error == "rate limited" -> "Too many requests in a short time. Wait a minute and try again."
             parsed?.error == "unknown food" -> detail.ifEmpty { "That isn't a food I recognise." }
             parsed?.error == "product not found" ->
                 "This product isn't in Open Food Facts yet. Switch to Label and photograph its nutrition panel."

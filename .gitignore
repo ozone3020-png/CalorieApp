@@ -15,3 +15,7 @@ worker/.wrangler/
 worker/dist/
 worker/data/
 __pycache__/
+keystore.properties
+
+# Built APKs and Worker packages to send to friends
+release/

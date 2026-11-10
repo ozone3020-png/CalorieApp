@@ -49,6 +49,18 @@ export default {
     if (!route) return json({ error: "not found" }, 404);
     if (request.method !== "POST") return json({ error: "use POST" }, 405);
 
+    // Only the app knows the token (set the APP_TOKEN secret to turn this on; unset = open, e.g. a friend's
+    // own Worker). It's inside the APK, so it stops casual use of a leaked URL rather than a determined person;
+    // the rate limit below caps what anyone can do with it.
+    if (env.APP_TOKEN && request.headers.get("x-app-token") !== env.APP_TOKEN) {
+      return json({ error: "unauthorized", detail: "This server only accepts requests from the Calorie App." }, 401);
+    }
+    if (env.LIMITER) {
+      const key = request.headers.get("x-device-id") || request.headers.get("cf-connecting-ip") || "unknown";
+      const { success } = await env.LIMITER.limit({ key });
+      if (!success) return json({ error: "rate limited", detail: "Too many requests; wait a minute." }, 429);
+    }
+
     let body;
     try {
       body = await request.json();

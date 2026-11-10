@@ -6,6 +6,12 @@ compatibility_date = "2025-01-01"
 [ai]
 binding = "AI"
 
+# Per-device rate limit (Cloudflare's rate limiting binding; free plan). Period must be 10 or 60 seconds.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
 [vars]
 # Open-weight vision model. Alternatives on Workers AI:
 #   @cf/mistralai/mistral-small-3.1-24b-instruct
