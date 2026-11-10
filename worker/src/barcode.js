@@ -2,7 +2,7 @@
 import { num } from "./model.js";
 
 const KJ_PER_KCAL = 4.184;
-const FIELDS = "code,product_name,brands,quantity,serving_quantity,nutriments";
+const FIELDS = "code,product_name,brands,quantity,serving_quantity,nutriments,categories_tags";
 // OFF asks API users to identify their app in the User-Agent.
 const USER_AGENT = "CalorieApp/0.1 (personal, non-commercial; https://github.com/)";
 
@@ -23,6 +23,7 @@ export function productToItem(p, code) {
   const protein = nonNegative(n.proteins_100g);
   const carbs = nonNegative(n.carbohydrates_100g);
   const fat = nonNegative(n.fat_100g);
+  const fibre = nonNegative(n.fiber_100g);
   const fromMacros = protein != null || carbs != null || fat != null
     ? 4 * (protein ?? 0) + 4 * (carbs ?? 0) + 9 * (fat ?? 0)
     : null;
@@ -72,6 +73,8 @@ export function productToItem(p, code) {
     protein_g: num((protein ?? 0) * f),
     carbs_g: num((carbs ?? 0) * f),
     fat_g: num((fat ?? 0) * f),
+    fibre_g: num((fibre ?? 0) * f),
+    group: fruitVegGroup(p.categories_tags),
     source: "off",
     match: `Open Food Facts: ${Math.round(kcal * KJ_PER_KCAL)} kJ / ${Math.round(kcal)} kcal per ${per}` +
       (p.quantity ? `, pack ${p.quantity}` : ""),
@@ -79,6 +82,18 @@ export function productToItem(p, code) {
       ? `Check against the package: ${warnings.join("; ")}.`
       : protein == null || carbs == null || fat == null ? "Check against the package: some values are missing." : null,
   };
+}
+
+/** Plain fruit / vegetable products (frozen peas, tinned peaches) count towards serves; juices and snacks don't. */
+export function fruitVegGroup(tags) {
+  const t = new Set(Array.isArray(tags) ? tags : []);
+  const excluded = [...t].some((x) => /juice|nectar|chips|crisps|snack|jam|sauce|soup|drink|smoothie|confection/.test(x));
+  if (excluded) return null;
+  if (t.has("en:dried-fruits")) return "dried_fruit";
+  if (["en:fruits", "en:fresh-fruits", "en:canned-fruits", "en:frozen-fruits"].some((x) => t.has(x))) return "fruit";
+  if (["en:vegetables", "en:fresh-vegetables", "en:frozen-vegetables", "en:canned-vegetables", "en:legumes",
+    "en:pulses", "en:canned-legumes"].some((x) => t.has(x))) return "veg";
+  return null;
 }
 
 function packSize(quantity) {

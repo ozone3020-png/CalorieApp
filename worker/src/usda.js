@@ -1,6 +1,6 @@
 // USDA FoodData Central search (generic foods only: Foundation + SR Legacy), values per 100 g.
 const ENERGY_IDS = [1008, 2047, 2048]; // Energy (kcal), then Atwater general/specific
-const PROTEIN = 1003, FAT = 1004, CARBS = 1005;
+const PROTEIN = 1003, FAT = 1004, CARBS = 1005, FIBRE = 1079;
 
 export async function searchUsda(env, query, limit = 5) {
   if (!env.USDA_API_KEY) return [];
@@ -35,6 +35,7 @@ function toCandidate(food) {
       protein: byId.get(PROTEIN) ?? 0,
       fat: byId.get(FAT) ?? 0,
       carbs: byId.get(CARBS) ?? 0,
+      fibre: byId.get(FIBRE) ?? 0,
     },
   };
 }

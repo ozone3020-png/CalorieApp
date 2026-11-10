@@ -110,7 +110,9 @@ class SyncRepository(
             )
         }
         val favourites = dao.favouritesChangedSince(since).map { f ->
-            val payload = BackupFood(f.name, f.grams, f.unit, f.calories, f.proteinG, f.carbsG, f.fatG, f.source, f.matchName)
+            val payload = BackupFood(
+                f.name, f.grams, f.unit, f.calories, f.proteinG, f.carbsG, f.fatG, f.source, f.matchName, f.fibreG, f.plantGroup,
+            )
             SyncChange(
                 kind = KIND_FAVOURITE,
                 id = f.syncId,
@@ -150,6 +152,7 @@ class SyncRepository(
                         name = f.name, grams = f.grams, unit = f.unit, calories = f.calories, proteinG = f.proteinG,
                         carbsG = f.carbsG, fatG = f.fatG, source = f.source, matchName = f.matchName,
                         addedAt = record.updatedAt, updatedAt = record.updatedAt,
+                        fibreG = f.fibreG, plantGroup = f.plantGroup,
                     ),
                 )
             }
@@ -161,9 +164,10 @@ class SyncRepository(
     }
 }
 
-private fun FoodEntryEntity.toBackupFood() = BackupFood(name, grams, unit, calories, proteinG, carbsG, fatG, source, matchName)
+private fun FoodEntryEntity.toBackupFood() =
+    BackupFood(name, grams, unit, calories, proteinG, carbsG, fatG, source, matchName, fibreG, plantGroup)
 
 private fun BackupFood.toEntry() = FoodEntryEntity(
     mealId = 0, name = name, grams = grams, calories = calories, proteinG = proteinG, carbsG = carbsG, fatG = fatG,
-    source = source, matchName = matchName, unit = unit,
+    source = source, matchName = matchName, unit = unit, fibreG = fibreG, plantGroup = plantGroup,
 )

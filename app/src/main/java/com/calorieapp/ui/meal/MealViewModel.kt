@@ -27,9 +27,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import com.calorieapp.data.PlantGroup
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
-import java.time.ZonedDateTime
 
 /** How the meal being edited started. */
 enum class MealOrigin { PHOTO, MANUAL, EDIT }
@@ -90,21 +91,41 @@ class MealViewModel(
     var origin by mutableStateOf(MealOrigin.PHOTO)
         private set
 
-    /** The day a new meal is logged on (the day being viewed in the log), or the edited meal's day. */
-    var targetDay: LocalDate = LocalDate.now()
+    /**
+     * When the meal is logged: the day being viewed in the log (or the edited meal's day) and a time. The user can
+     * change both, e.g. to log breakfast at 8 am when adding it at lunchtime.
+     */
+    var targetDay by mutableStateOf(LocalDate.now())
+        private set
+    var mealTime by mutableStateOf(LocalTime.NOON)
         private set
     private var editingMealId: Long? = null
 
-    /** The items as they were when editing started, to tell whether anything changed. */
+    /** The items and time as they were when editing started, to tell whether anything changed. */
     private var initialItems: List<EditableFoodItem> = emptyList()
+    private var initialWhen: Pair<LocalDate, LocalTime>? = null
 
     /** Whether closing would lose anything: a photo, typed foods, or changes to a saved meal. */
     val hasUnsavedWork: Boolean
         get() = when (origin) {
             MealOrigin.PHOTO -> true
             MealOrigin.MANUAL -> editItems.isNotEmpty()
-            MealOrigin.EDIT -> editItems.toList() != initialItems
+            MealOrigin.EDIT -> editItems.toList() != initialItems || (targetDay to mealTime) != initialWhen
         }
+
+    /** True while a typed meal description is being worked out. */
+    var isDescribing by mutableStateOf(false)
+        private set
+    var describeError by mutableStateOf<String?>(null)
+        private set
+
+    fun changeMealTime(time: LocalTime) {
+        mealTime = time.withSecond(0).withNano(0)
+    }
+
+    fun changeMealDay(day: LocalDate) {
+        targetDay = minOf(day, LocalDate.now())
+    }
 
     val recentFoods: StateFlow<List<FoodItem>> = mealRepository.observeRecentFoods()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -116,7 +137,10 @@ class MealViewModel(
         reset()
         origin = MealOrigin.PHOTO
         targetDay = day
+        // Now for today; midday for a past day being filled in (both easy to change on the results screen).
+        mealTime = if (day == LocalDate.now()) LocalTime.now().withSecond(0).withNano(0) else LocalTime.NOON
         editingMealId = null
+        initialWhen = null
     }
 
     /** Typing foods in without a photo; saved on [day]. */
@@ -128,7 +152,10 @@ class MealViewModel(
 
     /** Editing a meal already in the log; Save replaces its foods. */
     fun startEdit(meal: LoggedMeal) {
-        prepare(meal.loggedAt.atZone(ZoneId.systemDefault()).toLocalDate())
+        val at = meal.loggedAt.atZone(ZoneId.systemDefault())
+        prepare(at.toLocalDate())
+        mealTime = at.toLocalTime().withSecond(0).withNano(0)
+        initialWhen = targetDay to mealTime
         origin = MealOrigin.EDIT
         editingMealId = meal.id
         editItems.addAll(meal.foods.map { EditableFoodItem(key = nextKey++, original = it.item) })
@@ -148,6 +175,36 @@ class MealViewModel(
         val key = nextKey++
         editItems.add(EditableFoodItem(key = key, original = blank, name = name.trim()))
         commitName(key)
+    }
+
+    /** Splits a typed meal ("2 eggs on toast with avocado") into foods with amounts and nutrition, and adds them. */
+    fun describeMeal(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || isDescribing) return
+        isDescribing = true
+        describeError = null
+        viewModelScope.launch {
+            try {
+                val outcome = analyzeRepository.describe(trimmed)
+                editItems.addAll(outcome.items.map { EditableFoodItem(key = nextKey++, original = it) })
+                aiNote = outcome.aiNote
+            } catch (e: AnalyzeException) {
+                describeError = e.message
+            } finally {
+                isDescribing = false
+            }
+        }
+    }
+
+    /** Cycles an item through: not fruit/veg -> veg -> fruit -> dried fruit -> not fruit/veg. */
+    fun cyclePlantGroup(key: Long) = edit(key) {
+        val next = when (it.plantGroup) {
+            null -> PlantGroup.VEG
+            PlantGroup.VEG -> PlantGroup.FRUIT
+            PlantGroup.FRUIT -> PlantGroup.DRIED_FRUIT
+            PlantGroup.DRIED_FRUIT -> null
+        }
+        it.copy(plantGroup = next)
     }
 
     fun isFavourite(item: FoodItem) = favourites.value.any { it.name.equals(item.name.trim(), ignoreCase = true) }
@@ -234,7 +291,13 @@ class MealViewModel(
         return try {
             val found = analyzeRepository.lookup(name, item.lookupGrams, item.unit)
             // Only apply if the user hasn't typed something else meanwhile.
-            edit(key) { if (it.name.trim() == name) it.copy(original = found.copy(name = name), lookup = LookupState.Idle) else it }
+            edit(key) {
+                if (it.name.trim() == name) {
+                    it.copy(original = found.copy(name = name), plantGroup = found.plantGroup, lookup = LookupState.Idle)
+                } else {
+                    it
+                }
+            }
             true
         } catch (e: AnalyzeException) {
             edit(key) { it.copy(lookup = LookupState.Failed(e.message.orEmpty())) }
@@ -261,10 +324,11 @@ class MealViewModel(
         val mealId = editingMealId
         viewModelScope.launch {
             try {
+                val at = targetDay.atTime(mealTime).atZone(ZoneId.systemDefault())
                 if (origin == MealOrigin.EDIT && mealId != null) {
-                    mealRepository.replaceMeal(mealId, items)
+                    mealRepository.replaceMeal(mealId, items, at)
                 } else {
-                    mealRepository.saveMeal(items, at = timeOn(targetDay))
+                    mealRepository.saveMeal(items, at)
                 }
                 reset()
                 onSaved()
@@ -287,12 +351,11 @@ class MealViewModel(
         aiNote = null
         editItems.clear()
         saveError = null
+        isDescribing = false
+        describeError = null
         _state.value = AnalysisState.Idle
     }
 
-    /** Now if [day] is today; midday for a past day being filled in. */
-    private fun timeOn(day: LocalDate): ZonedDateTime =
-        if (day == LocalDate.now()) ZonedDateTime.now() else day.atTime(12, 0).atZone(ZoneId.systemDefault())
 
     override fun onCleared() {
         photo?.delete()

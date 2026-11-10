@@ -30,6 +30,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
@@ -69,6 +70,8 @@ import com.calorieapp.ui.common.energyText
 import com.calorieapp.ui.meal.EditableFoodItem
 import com.calorieapp.ui.meal.LookupState
 import com.calorieapp.ui.meal.MealOrigin
+import java.time.LocalDate
+import java.time.LocalTime
 
 /** Step 3: edit each item's name and weight, watch totals update, then save the meal. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -94,6 +97,14 @@ fun ResultsScreen(
     onAddFood: (FoodItem) -> Unit,
     onAddNamedFood: (String) -> Unit,
     onToggleFavourite: (FoodItem) -> Unit,
+    mealDay: LocalDate,
+    mealTime: LocalTime,
+    onMealTimeChange: (LocalTime) -> Unit,
+    onMealDayChange: (LocalDate) -> Unit,
+    isDescribing: Boolean,
+    describeError: String?,
+    onDescribeMeal: (String) -> Unit,
+    onCyclePlantGroup: (key: Long) -> Unit,
     onSave: () -> Unit,
     onDiscard: () -> Unit,
 ) {
@@ -111,6 +122,7 @@ fun ResultsScreen(
             favourites = favourites,
             onPick = { onAddFood(it); showAddFood = false },
             onLookUp = { onAddNamedFood(it); showAddFood = false },
+            onDescribe = { onDescribeMeal(it); showAddFood = false },
             onToggleFavourite = onToggleFavourite,
             onDismiss = { showAddFood = false },
         )
@@ -204,13 +216,21 @@ fun ResultsScreen(
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text(
-                    if (origin == MealOrigin.MANUAL) "No foods yet." else "All items removed.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Spacer(Modifier.size(16.dp))
-                AddFoodButton(onClick = { showAddFood = true })
+                if (isDescribing) {
+                    DescribingIndicator()
+                } else {
+                    Text(
+                        if (origin == MealOrigin.MANUAL) "No foods yet." else "All items removed.",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    describeError?.let {
+                        Spacer(Modifier.size(8.dp))
+                        Text(it, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.error)
+                    }
+                    Spacer(Modifier.size(16.dp))
+                    AddFoodButton(onClick = { showAddFood = true })
+                }
             }
         } else {
             LazyColumn(
@@ -224,6 +244,9 @@ fun ResultsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "when") {
+                    WhenCard(mealDay, mealTime, enabled = !isSaving, onTimeChange = onMealTimeChange, onDayChange = onMealDayChange)
+                }
                 items(items, key = { it.key }) { item ->
                     FoodItemEditor(
                         item = item,
@@ -232,9 +255,14 @@ fun ResultsScreen(
                         onNameCommit = { onNameCommit(item.key) },
                         onGramsChange = { onGramsChange(item.key, it) },
                         onUnitToggle = { onUnitToggle(item.key) },
+                        onCyclePlantGroup = { onCyclePlantGroup(item.key) },
                         onRemove = { onRemove(item.key) },
                         onDone = { focusManager.clearFocus() },
                     )
+                }
+                if (isDescribing) item(key = "describing") { DescribingIndicator() }
+                describeError?.let { error ->
+                    item(key = "describe-error") { Text(error, color = MaterialTheme.colorScheme.error) }
                 }
                 item(key = "add") {
                     AddFoodButton(onClick = { focusManager.clearFocus(); showAddFood = true }, enabled = !isSaving)
@@ -266,6 +294,15 @@ fun ResultsScreen(
 }
 
 @Composable
+private fun DescribingIndicator() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(12.dp))
+        Text("Working out your meal…", style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+@Composable
 private fun AddFoodButton(onClick: () -> Unit, enabled: Boolean = true) {
     OutlinedButton(onClick = onClick, enabled = enabled) {
         Icon(Icons.Filled.Add, contentDescription = null)
@@ -282,6 +319,7 @@ private fun FoodItemEditor(
     onNameCommit: () -> Unit,
     onGramsChange: (String) -> Unit,
     onUnitToggle: () -> Unit,
+    onCyclePlantGroup: () -> Unit,
     onRemove: () -> Unit,
     onDone: () -> Unit,
 ) {
@@ -343,10 +381,25 @@ private fun FoodItemEditor(
                     "Enter an amount between 1 and ${EditableFoodItem.MAX_GRAMS.toInt()} ${item.unit.label}"
                 } else {
                     "${energyText(current.calories, LocalEnergyUnit.current)} · P ${current.proteinG.fmt()} g · " +
-                        "C ${current.carbsG.fmt()} g · F ${current.fatG.fmt()} g"
+                        "C ${current.carbsG.fmt()} g · F ${current.fatG.fmt()} g · Fibre ${current.fibreG.fmt()} g"
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (current == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // Fruit / veg: tap to correct (cycles not fruit/veg -> veg -> fruit -> dried fruit).
+            FilterChip(
+                selected = item.plantGroup != null,
+                onClick = onCyclePlantGroup,
+                enabled = enabled,
+                label = {
+                    Text(
+                        when (val g = item.plantGroup) {
+                            null -> "Not fruit or veg"
+                            else -> "${g.label} · ${(current?.serves ?: 0.0).fmt()} serves"
+                        },
+                    )
+                },
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
     }
@@ -408,7 +461,7 @@ private fun TotalsCard(totals: NutritionTotals) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(16.dp),
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             val unit = LocalEnergyUnit.current
@@ -417,6 +470,11 @@ private fun TotalsCard(totals: NutritionTotals) {
             Stat("Carbs", "${totals.carbsG.fmt()} g")
             Stat("Fat", "${totals.fatG.fmt()} g")
         }
+        Text(
+            "Fibre ${totals.fibreG.fmt()} g · Fruit ${totals.fruitServes.fmt()} serves · Veg ${totals.vegServes.fmt()} serves",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+        )
     }
 }
 

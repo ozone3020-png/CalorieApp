@@ -40,11 +40,20 @@ data class Goals(
     val proteinG: Double,
     val carbsG: Double,
     val fatG: Double,
+    val fibreG: Double = AU_FIBRE_G,
+    val fruitServes: Double = AU_FRUIT_SERVES,
+    val vegServes: Double = AU_VEG_SERVES,
 ) {
     companion object {
+        // Fibre: the 30 g reference value on Australian labels. Fruit & veg: Australian Dietary Guidelines
+        // serves for adults (2 fruit, 5 veg).
+        const val AU_FIBRE_G = 30.0
+        const val AU_FRUIT_SERVES = 2.0
+        const val AU_VEG_SERVES = 5.0
+
         /**
          * The reference values Australian labels use for "% daily intake" (average adult):
-         * 8700 kJ, 50 g protein, 310 g carbohydrate, 70 g fat.
+         * 8700 kJ, 50 g protein, 310 g carbohydrate, 70 g fat, 30 g fibre; plus 2 fruit and 5 veg serves.
          */
         val AU_REFERENCE = Goals(kcal = 8700 / EnergyUnit.KJ_PER_KCAL, proteinG = 50.0, carbsG = 310.0, fatG = 70.0)
     }
@@ -98,6 +107,9 @@ class SettingsRepository(private val context: Context) {
         it[GOAL_PROTEIN] = goals.proteinG
         it[GOAL_CARBS] = goals.carbsG
         it[GOAL_FAT] = goals.fatG
+        it[GOAL_FIBRE] = goals.fibreG
+        it[GOAL_FRUIT] = goals.fruitServes
+        it[GOAL_VEG] = goals.vegServes
     }
 
     /** Saves a custom server URL, or clears it (back to the built-in one) when null/blank. */
@@ -116,6 +128,9 @@ class SettingsRepository(private val context: Context) {
                 proteinG = this[GOAL_PROTEIN] ?: defaults.proteinG,
                 carbsG = this[GOAL_CARBS] ?: defaults.carbsG,
                 fatG = this[GOAL_FAT] ?: defaults.fatG,
+                fibreG = this[GOAL_FIBRE] ?: defaults.fibreG,
+                fruitServes = this[GOAL_FRUIT] ?: defaults.fruitServes,
+                vegServes = this[GOAL_VEG] ?: defaults.vegServes,
             ),
             serverUrl = this[SERVER_URL],
             aiProvider = AiProvider.from(this[AI_PROVIDER]) ?: AiProvider.WORKERS_AI,
@@ -136,6 +151,9 @@ class SettingsRepository(private val context: Context) {
         val GOAL_PROTEIN = doublePreferencesKey("goal_protein_g")
         val GOAL_CARBS = doublePreferencesKey("goal_carbs_g")
         val GOAL_FAT = doublePreferencesKey("goal_fat_g")
+        val GOAL_FIBRE = doublePreferencesKey("goal_fibre_g")
+        val GOAL_FRUIT = doublePreferencesKey("goal_fruit_serves")
+        val GOAL_VEG = doublePreferencesKey("goal_veg_serves")
         val SERVER_URL = stringPreferencesKey("server_url")
         val AI_PROVIDER = stringPreferencesKey("ai_provider")
         val SYNC_KEY = stringPreferencesKey("sync_key")

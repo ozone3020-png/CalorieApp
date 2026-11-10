@@ -176,6 +176,14 @@ private fun CalorieNavHost() {
                     onAddFood = meal::addFood,
                     onAddNamedFood = meal::addNamedFood,
                     onToggleFavourite = meal::toggleFavourite,
+                    mealDay = meal.targetDay,
+                    mealTime = meal.mealTime,
+                    onMealTimeChange = meal::changeMealTime,
+                    onMealDayChange = meal::changeMealDay,
+                    isDescribing = meal.isDescribing,
+                    describeError = meal.describeError,
+                    onDescribeMeal = meal::describeMeal,
+                    onCyclePlantGroup = meal::cyclePlantGroup,
                     onSave = {
                         val edited = meal.origin == MealOrigin.EDIT
                         val day = meal.targetDay

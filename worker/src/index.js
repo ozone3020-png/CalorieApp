@@ -3,6 +3,7 @@
 //   with mode: "label" -> reads a nutrition information panel instead: one item, source "label", maybe a `warning`
 // POST /barcode { code: "9300675024235" } -> { items: [one product] }, source "off" (Open Food Facts), maybe a `warning`;
 //   404 "product not found" when Open Food Facts doesn't have it
+// POST /describe { text: "2 eggs on toast with avocado" } -> { items: [...] } like /analyze, from a typed meal
 // POST /sync    encrypted meal/favourite sync between a user's phones (see sync.js)
 // POST /lookup  { name: "rice", grams: 180, unit?: "g" | "ml" }
 //   -> { item: { name, grams, calories, protein_g, carbs_g, fat_g, source, match } }
@@ -26,11 +27,26 @@ For each item:
 - unit: "ml" for drinks and other liquids you would pour (water, milk, juice, soft drink, coffee, beer, wine),
   otherwise "g".
 - grams: estimated amount in that unit from visual cues (plate size, glass/can/bottle size, typical servings).
-- calories, protein_g, carbs_g, fat_g: your estimate for that portion.
+- calories, protein_g, carbs_g, fat_g, fibre_g: your estimate for that portion.
+- group: "veg" (vegetables, salad, legumes, potatoes but not chips), "fruit", "dried_fruit" or "none".
 
 Respond with ONLY a JSON object, no prose, no markdown fences, in exactly this shape:
-{"items":[{"name":"string","unit":"g","grams":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number}]}
+{"items":[{"name":"string","unit":"g","grams":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fibre_g":number,"group":"none"}]}
 If no food is visible, return {"items":[]}.`;
+
+const DESCRIBE_PROMPT = `The user describes, in their own words, a meal or snack they ate. List each distinct food or drink.
+For each item:
+- name: a short generic name using Australian food terms, including preparation if stated or obvious
+  (e.g. "egg, poached", "bread, wholemeal, toasted", "flat white"). Split combined foods into their parts
+  ("eggs on toast with avocado" -> eggs, toast, avocado) unless it's one dish (e.g. "lasagne").
+- unit: "ml" for drinks and pourable liquids, otherwise "g".
+- grams: the amount in that unit. Convert stated amounts ("2 eggs" = 2 x 50 g, "a cup of rice" ≈ 180 g cooked,
+  "a slice of toast" ≈ 35 g, "a flat white" ≈ 220 mL). If no amount is given, use a typical single serving.
+- calories, protein_g, carbs_g, fat_g, fibre_g: your estimate for that amount.
+- group: "veg" (vegetables, salad, legumes, potatoes but not chips), "fruit", "dried_fruit" or "none".
+
+Respond with ONLY JSON: {"items":[{"name":"string","unit":"g","grams":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fibre_g":number,"group":"none"}]}
+If the text doesn't describe any food or drink, return {"items":[]}.`;
 
 const MAX_IMAGE_BASE64_CHARS = 6_000_000; // ~4.5 MB JPEG
 const MAX_ITEMS = 12;
@@ -47,7 +63,9 @@ export default {
       return json((data.models ?? []).filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
         .map((m) => m.name));
     }
-    const route = { "/analyze": analyze, "/lookup": lookup, "/barcode": barcode, "/sync": syncRoute }[pathname];
+    const route = {
+      "/analyze": analyze, "/describe": describe, "/lookup": lookup, "/barcode": barcode, "/sync": syncRoute,
+    }[pathname];
     if (!route) return json({ error: "not found" }, 404);
     if (request.method !== "POST") return json({ error: "use POST" }, 405);
 
@@ -106,6 +124,29 @@ async function analyze(body, env) {
     .slice(0, MAX_ITEMS)
     .map((it) => ({ ...it, name: it.name.trim() }));
 
+  const items = await resolveNutrition(env, ai, detected);
+  return json({ items, ...aiInfo(ai) });
+}
+
+async function describe(body, env) {
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (!text) return json({ error: "missing 'text'" }, 400);
+  if (text.length > 1000) return json({ error: "text too long" }, 413);
+  const ai = makeAi(env, providerOf(body), devOptions(env, body));
+  const response = await ai.run([
+    { role: "system", content: DESCRIBE_PROMPT },
+    { role: "user", content: text },
+  ], 1024);
+  const parsed = parseJson(response);
+  const list = Array.isArray(parsed) ? parsed : parsed?.items;
+  if (!Array.isArray(list)) {
+    return json({ error: "could not parse model output", raw: String(response ?? "").slice(0, 500) }, 502);
+  }
+  const detected = list
+    .filter((it) => it && typeof it.name === "string" && it.name.trim() && num(it.grams, 0) > 0)
+    .slice(0, MAX_ITEMS)
+    .map((it) => ({ ...it, name: it.name.trim() }));
+  if (!detected.length) return json({ error: "no food described", detail: "Couldn't find any food in that." }, 422);
   const items = await resolveNutrition(env, ai, detected);
   return json({ items, ...aiInfo(ai) });
 }

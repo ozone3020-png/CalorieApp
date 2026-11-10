@@ -33,7 +33,15 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** Text fields for the goals, kept as typed so editing feels natural; energy is in the chosen unit. */
-data class GoalFields(val energy: String, val protein: String, val carbs: String, val fat: String) {
+data class GoalFields(
+    val energy: String,
+    val protein: String,
+    val carbs: String,
+    val fat: String,
+    val fibre: String = Goals.AU_FIBRE_G.fmt(),
+    val fruit: String = Goals.AU_FRUIT_SERVES.fmt(),
+    val veg: String = Goals.AU_VEG_SERVES.fmt(),
+) {
     fun parse(unit: EnergyUnit): Goals? {
         val e = energy.toPositive() ?: return null
         return Goals(
@@ -41,6 +49,9 @@ data class GoalFields(val energy: String, val protein: String, val carbs: String
             proteinG = protein.toPositive() ?: return null,
             carbsG = carbs.toPositive() ?: return null,
             fatG = fat.toPositive() ?: return null,
+            fibreG = fibre.toPositive() ?: return null,
+            fruitServes = fruit.toPositive() ?: return null,
+            vegServes = veg.toPositive() ?: return null,
         )
     }
 
@@ -50,6 +61,9 @@ data class GoalFields(val energy: String, val protein: String, val carbs: String
             protein = goals.proteinG.fmt(),
             carbs = goals.carbsG.fmt(),
             fat = goals.fatG.fmt(),
+            fibre = goals.fibreG.fmt(),
+            fruit = goals.fruitServes.fmt(),
+            veg = goals.vegServes.fmt(),
         )
     }
 }

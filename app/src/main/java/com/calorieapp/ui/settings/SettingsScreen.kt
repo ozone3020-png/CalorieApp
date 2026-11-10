@@ -148,9 +148,16 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                     NumberField("Carbs", f.carbs, "g", Modifier.weight(1f)) { vm.editGoals(f.copy(carbs = it)) }
                     NumberField("Fat", f.fat, "g", Modifier.weight(1f)) { vm.editGoals(f.copy(fat = it)) }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NumberField("Fibre", f.fibre, "g", Modifier.weight(1f)) { vm.editGoals(f.copy(fibre = it)) }
+                    NumberField("Fruit", f.fruit, "serves", Modifier.weight(1f)) { vm.editGoals(f.copy(fruit = it)) }
+                    NumberField("Veg", f.veg, "serves", Modifier.weight(1f)) { vm.editGoals(f.copy(veg = it)) }
+                }
                 Text(
                     "Defaults are the reference values Australian labels use for % daily intake " +
-                        "(average adult: 8700 kJ, 50 g protein, 310 g carbs, 70 g fat). Set your own targets.",
+                        "(average adult: 8700 kJ, 50 g protein, 310 g carbs, 70 g fat, 30 g fibre) and the " +
+                        "Australian Dietary Guidelines' 2 serves of fruit (150 g each) and 5 of vegetables " +
+                        "(75 g each). Set your own targets.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -9,19 +9,22 @@ Transcribe the numbers EXACTLY as printed. Do not estimate, calculate or guess.
 Read each row across carefully: the label may be curved or slanted, so match each value to its row
 and column by position. Use null for anything you cannot read clearly.
 Energy may be printed in kJ, Cal/kcal or both; report what is printed. "Cal" means kcal.
-Report carbohydrate as "carbohydrate, total" (not sugars).
+Report carbohydrate as "carbohydrate, total" (not sugars). Dietary fibre is optional on labels: null if absent.
 
 Respond with ONLY JSON, no prose:
 {"is_label":true,
  "product":"product name if visible, else null",
  "serving_size":number or null, "serving_unit":"g" or "ml" or null,
  "servings_per_package":number or null,
- "per_100":{"energy_kj":number|null,"energy_kcal":number|null,"protein_g":number|null,"fat_g":number|null,"carbs_g":number|null,"sugars_g":number|null},
- "per_serving":{"energy_kj":number|null,"energy_kcal":number|null,"protein_g":number|null,"fat_g":number|null,"carbs_g":number|null,"sugars_g":number|null}}
+ "per_100":{"energy_kj":number|null,"energy_kcal":number|null,"protein_g":number|null,"fat_g":number|null,"carbs_g":number|null,"sugars_g":number|null,"fibre_g":number|null},
+ "per_serving":{"energy_kj":number|null,"energy_kcal":number|null,"protein_g":number|null,"fat_g":number|null,"carbs_g":number|null,"sugars_g":number|null,"fibre_g":number|null}}
 If the photo does not show a nutrition panel, return {"is_label":false}.`;
 
 const KJ_PER_KCAL = 4.184;
 const FIELDS = ["protein_g", "fat_g", "carbs_g"];
+// Not every label lists these, so a missing one isn't a warning.
+const OPTIONAL = ["fibre_g"];
+const ALL_FIELDS = [...FIELDS, ...OPTIONAL];
 
 /**
  * Turns the model's transcription into an item for one serving (or 100 g/mL if no serving size),
@@ -39,7 +42,7 @@ export function labelToItem(raw) {
   let base = pServ.kcal != null && size ? scale(pServ, 100 / size) : null;
   if (!base && p100.kcal != null) base = { ...p100 };
   if (!base) return null;
-  for (const f of FIELDS) {
+  for (const f of ALL_FIELDS) {
     if (base[f] == null && p100[f] != null) base[f] = p100[f];
   }
 
@@ -65,6 +68,8 @@ export function labelToItem(raw) {
     protein_g: num((base.protein_g ?? 0) * f),
     carbs_g: num((base.carbs_g ?? 0) * f),
     fat_g: num((base.fat_g ?? 0) * f),
+    fibre_g: num((base.fibre_g ?? 0) * f),
+    group: null,
     source: "label",
     match: `Nutrition label: ${Math.round(base.kcal * KJ_PER_KCAL)} kJ / ${fmt(base.kcal)} kcal per ${per}` +
       (size ? `, serving ${fmt(size)} ${unit === "ml" ? "mL" : "g"}` : ""),
@@ -77,7 +82,7 @@ function column(c) {
   const kj = positive(c?.energy_kj);
   const kcal = kj != null ? kj / KJ_PER_KCAL : positive(c?.energy_kcal);
   const out = { kcal };
-  for (const f of FIELDS) out[f] = nonNegative(c?.[f]);
+  for (const f of ALL_FIELDS) out[f] = nonNegative(c?.[f]);
   // A printed "0 kJ" column is valid (e.g. diet drinks).
   if (out.kcal == null && (c?.energy_kj === 0 || c?.energy_kcal === 0)) out.kcal = 0;
   return out;
@@ -85,7 +90,7 @@ function column(c) {
 
 function scale(c, factor) {
   const out = { kcal: c.kcal * factor };
-  for (const f of FIELDS) out[f] = c[f] == null ? null : c[f] * factor;
+  for (const f of ALL_FIELDS) out[f] = c[f] == null ? null : c[f] * factor;
   return out;
 }
 

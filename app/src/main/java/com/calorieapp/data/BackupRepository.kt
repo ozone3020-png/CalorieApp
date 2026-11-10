@@ -37,6 +37,9 @@ data class BackupSettings(
     val goalCarbsG: Double,
     val goalFatG: Double,
     val aiProvider: String,
+    val goalFibreG: Double? = null,
+    val goalFruitServes: Double? = null,
+    val goalVegServes: Double? = null,
 )
 
 @Serializable
@@ -53,6 +56,9 @@ data class BackupFood(
     val fatG: Double,
     val source: String? = null,
     val matchName: String? = null,
+    // Added in 0.6; absent in older backups and synced records.
+    val fibreG: Double = 0.0,
+    val plantGroup: String? = null,
 )
 
 data class RestoreResult(val mealsAdded: Int, val mealsSkipped: Int, val favourites: Int, val settingsRestored: Boolean)
@@ -79,6 +85,9 @@ class BackupRepository(
                 goalCarbsG = s.goals.carbsG,
                 goalFatG = s.goals.fatG,
                 aiProvider = s.aiProvider.wire,
+                goalFibreG = s.goals.fibreG,
+                goalFruitServes = s.goals.fruitServes,
+                goalVegServes = s.goals.vegServes,
             ),
             meals = dao.getAllMeals().map { m ->
                 BackupMeal(m.meal.loggedAt, m.meal.epochDay, m.entries.sortedBy { it.id }.map { it.toBackup() })
@@ -136,7 +145,15 @@ class BackupRepository(
         }
         val restoredSettings = backup.settings?.let { s ->
             settings.setEnergyUnit(EnergyUnit.entries.firstOrNull { it.name == s.energyUnit } ?: EnergyUnit.KCAL)
-            settings.setGoals(Goals(s.goalKcal, s.goalProteinG, s.goalCarbsG, s.goalFatG))
+            val d = Goals.AU_REFERENCE
+            settings.setGoals(
+                Goals(
+                    s.goalKcal, s.goalProteinG, s.goalCarbsG, s.goalFatG,
+                    fibreG = s.goalFibreG ?: d.fibreG,
+                    fruitServes = s.goalFruitServes ?: d.fruitServes,
+                    vegServes = s.goalVegServes ?: d.vegServes,
+                ),
+            )
             AiProvider.from(s.aiProvider)?.let { settings.setAiProvider(it) }
             true
         } ?: false
@@ -151,7 +168,7 @@ class BackupRepository(
         val rows = mutableListOf(
             listOf(
                 "date", "time", "meal_id", "food", "amount", "unit", "energy_kcal", "energy_kj",
-                "protein_g", "carbs_g", "fat_g", "source", "database_match",
+                "protein_g", "carbs_g", "fat_g", "fibre_g", "fruit_veg", "fruit_veg_serves", "source", "database_match",
             ),
         )
         for (m in dao.getAllMeals()) {
@@ -160,7 +177,9 @@ class BackupRepository(
                 rows += listOf(
                     at.format(date), at.format(time), m.meal.id.toString(), e.name, num(e.grams), e.unit,
                     num(e.calories), num(e.calories * EnergyUnit.KJ_PER_KCAL), num(e.proteinG), num(e.carbsG),
-                    num(e.fatG), e.source.orEmpty(), e.matchName.orEmpty(),
+                    num(e.fatG), num(e.fibreG), e.plantGroup.orEmpty(),
+                    PlantGroup.from(e.plantGroup)?.let { num(e.grams / it.serveGrams) }.orEmpty(),
+                    e.source.orEmpty(), e.matchName.orEmpty(),
                 )
             }
         }
@@ -186,17 +205,18 @@ internal fun csvField(value: String): String =
 private fun num(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else "%.1f".format(java.util.Locale.ROOT, v)
 
 private fun FoodEntryEntity.toBackup() =
-    BackupFood(name, grams, unit, calories, proteinG, carbsG, fatG, source, matchName)
+    BackupFood(name, grams, unit, calories, proteinG, carbsG, fatG, source, matchName, fibreG, plantGroup)
 
 private fun FavouriteFoodEntity.toBackup() =
-    BackupFood(name, grams, unit, calories, proteinG, carbsG, fatG, source, matchName)
+    BackupFood(name, grams, unit, calories, proteinG, carbsG, fatG, source, matchName, fibreG, plantGroup)
 
 private fun BackupFood.toEntry() = FoodEntryEntity(
     mealId = 0, name = name, grams = grams, calories = calories, proteinG = proteinG, carbsG = carbsG,
-    fatG = fatG, source = source, matchName = matchName, unit = unit,
+    fatG = fatG, source = source, matchName = matchName, unit = unit, fibreG = fibreG, plantGroup = plantGroup,
 )
 
 private fun BackupFood.toFavourite() = FavouriteFoodEntity(
     name = name, grams = grams, unit = unit, calories = calories, proteinG = proteinG, carbsG = carbsG,
     fatG = fatG, source = source, matchName = matchName, addedAt = System.currentTimeMillis(),
+    fibreG = fibreG, plantGroup = plantGroup,
 )

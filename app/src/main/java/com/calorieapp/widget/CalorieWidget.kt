@@ -105,8 +105,16 @@ private fun WidgetContent(totals: NutritionTotals, settings: UserSettings) {
                 "F ${Math.round(totals.fatG)}/${Math.round(goals.fatG)} g",
             style = muted,
         )
+        Text(
+            "Fibre ${Math.round(totals.fibreG)}/${Math.round(goals.fibreG)} g · " +
+                "Fruit ${serves(totals.fruitServes)}/${serves(goals.fruitServes)} · " +
+                "Veg ${serves(totals.vegServes)}/${serves(goals.vegServes)}",
+            style = muted,
+        )
     }
 }
+
+private fun serves(v: Double): String = if (v % 1.0 == 0.0) v.toLong().toString() else "%.1f".format(v)
 
 private fun fraction(value: Double, goal: Double): Float =
     if (goal <= 0) 0f else (value / goal).toFloat().coerceIn(0f, 1f)

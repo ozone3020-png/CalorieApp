@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
@@ -50,6 +51,7 @@ fun AddFoodSheet(
     favourites: List<FoodItem>,
     onPick: (FoodItem) -> Unit,
     onLookUp: (String) -> Unit,
+    onDescribe: (String) -> Unit,
     onToggleFavourite: (FoodItem) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -68,25 +70,41 @@ fun AddFoodSheet(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search, or type any food") },
+                placeholder = { Text("A food, or a whole meal") },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
                     imeAction = ImeAction.Search,
                 ),
-                keyboardActions = KeyboardActions(onSearch = { if (q.isNotEmpty()) onLookUp(q) }),
+                keyboardActions = KeyboardActions(onSearch = { if (q.isNotEmpty()) (if (looksLikeMeal(q)) onDescribe else onLookUp)(q) }),
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             )
             LazyColumn(Modifier.heightIn(max = 520.dp)) {
                 if (q.isNotEmpty()) {
-                    item(key = "lookup") {
+                    val describeRow: @Composable () -> Unit = {
                         ListItem(
-                            headlineContent = { Text("Look up \"$q\"") },
+                            headlineContent = { Text("Add \"$q\" as a meal") },
+                            supportingContent = { Text("Split into foods and amounts, e.g. \"2 eggs on toast and a flat white\"") },
+                            leadingContent = { Icon(Icons.Filled.Restaurant, contentDescription = null) },
+                            modifier = Modifier.clickable { onDescribe(q) },
+                        )
+                    }
+                    val lookupRow: @Composable () -> Unit = {
+                        ListItem(
+                            headlineContent = { Text("Look up \"$q\" as one food") },
                             supportingContent = { Text("Nutrition from AFCD, then USDA, then an AI estimate") },
                             leadingContent = { Icon(Icons.Filled.Search, contentDescription = null) },
                             modifier = Modifier.clickable { onLookUp(q) },
                         )
+                    }
+                    // Put the likelier choice first.
+                    if (looksLikeMeal(q)) {
+                        item(key = "describe") { describeRow() }
+                        item(key = "lookup") { lookupRow() }
+                    } else {
+                        item(key = "lookup") { lookupRow() }
+                        item(key = "describe") { describeRow() }
                     }
                 }
                 if (matchingFavourites.isNotEmpty()) {
@@ -104,7 +122,8 @@ fun AddFoodSheet(
                 if (q.isEmpty() && favourites.isEmpty() && recent.isEmpty()) {
                     item(key = "empty") {
                         Text(
-                            "Foods you log will show up here for one-tap re-logging. Type a food above to look it up.",
+                            "Type a food to look it up, or describe a whole meal (\"2 eggs on toast and a flat white\"). " +
+                                "Foods you log will show up here for one-tap re-logging.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 16.dp),
@@ -154,5 +173,9 @@ private fun QuickFoodRow(food: FoodItem, isFavourite: Boolean, onPick: () -> Uni
         modifier = Modifier.clickable(onClick = onPick),
     )
 }
+
+/** Several foods ("eggs and toast", "2 eggs, toast") rather than one. */
+internal fun looksLikeMeal(text: String): Boolean =
+    Regex("""(,|&|\+|\b(and|with|plus|on)\b|^\s*\d)""", RegexOption.IGNORE_CASE).containsMatchIn(text)
 
 private fun FoodItem.matches(query: String) = query.isEmpty() || name.contains(query, ignoreCase = true)

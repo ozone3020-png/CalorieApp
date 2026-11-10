@@ -104,6 +104,14 @@ no paid APIs, no Play Store fee.
       Checked end to end: test app ⇄ an independent Node client (add, edit, delete both ways)
 - [ ] Owner: add the widget to the home screen; decide whether to turn sync on (and save the key safely)
 
+### 0.6 — Typed meals, meal times, fibre and fruit & veg ✅
+- [x] Type a whole meal in words (`/describe`): split into foods + amounts, then the usual AFCD → USDA → AI matching
+- [x] "When" on every meal: Breakfast/Lunch/Dinner/Snack buttons, exact time and day; saved meals can be moved
+- [x] Fibre everywhere (AFCD, USDA, Open Food Facts, labels, AI); goal 30 g
+- [x] Fruit & veg serves (ADG: 150 g fruit, 30 g dried, 75 g veg/legumes; goals 2 and 5). AFCD food groups decide
+      when matched (juice, hot chips, banana chips excluded), otherwise the AI; tap to correct
+- [x] DB v6 (auto-migration, checked on the Pixel: log unchanged). Foods logged before 0.6 have 0 fibre and no group
+
 ### Ideas for later
 - Sign in with Google as an alternative to the sync key (needs a Google Cloud project)
 - Swipe between days on the log; weight tracking; reminders to log meals

@@ -26,8 +26,8 @@ android {
         applicationId = "com.calorieapp"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.5.0"
+        versionCode = 3
+        versionName = "0.6.0"
 
         val workerUrl = providers.gradleProperty("WORKER_URL").getOrElse("http://10.0.2.2:8787/")
         buildConfigField("String", "WORKER_URL", "\"$workerUrl\"")

@@ -22,4 +22,14 @@ class GoalFieldsTest {
         assertNull(ok.copy(fat = "abc").parse(EnergyUnit.KCAL))
         assertEquals(62.5, ok.copy(fat = "62,5").parse(EnergyUnit.KCAL)!!.fatG, 1e-9)
     }
+
+    @Test fun `fibre and fruit-veg goals default to Australian guidance and must be positive`() {
+        val g = GoalFields.from(Goals.AU_REFERENCE, EnergyUnit.KCAL).parse(EnergyUnit.KCAL)!!
+        assertEquals(30.0, g.fibreG, 1e-9)
+        assertEquals(2.0, g.fruitServes, 1e-9)
+        assertEquals(5.0, g.vegServes, 1e-9)
+        val ok = GoalFields("2000", "120", "200", "60")
+        assertEquals(7.5, ok.copy(veg = "7,5").parse(EnergyUnit.KCAL)!!.vegServes, 1e-9)
+        assertNull(ok.copy(fibre = "").parse(EnergyUnit.KCAL))
+    }
 }

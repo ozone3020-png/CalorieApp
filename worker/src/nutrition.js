@@ -22,10 +22,17 @@ For each item pick the ONE candidate id that best represents the food as eaten.
   If there is no such candidate, use null.
 - If no candidate is a reasonable match, use null.
 
-Reply with ONLY JSON: {"matches":[{"i":0,"id":"A3"},{"i":1,"id":null}]}`;
+Also classify each item for Australian Dietary Guidelines serves, as "group":
+- "veg": vegetables, salad, legumes (beans, lentils, chickpeas), potatoes (not chips/fries)
+- "fruit": fresh, frozen or tinned fruit; "dried_fruit": dried fruit
+- "none": everything else, including juice, chips, and mixed dishes where fruit/veg isn't the main part
+
+Reply with ONLY JSON: {"matches":[{"i":0,"id":"A3","group":"veg"},{"i":1,"id":null,"group":"none"}]}`;
 
 const ESTIMATE_PROMPT = `You are a nutrition estimator. Estimate nutrition for the given weight of the food as typically eaten.
-Reply with ONLY JSON: {"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number}
+"group" is "veg" (vegetables, salad, legumes, potatoes but not chips), "fruit", "dried_fruit" or "none"
+(everything else, including juice and mixed dishes).
+Reply with ONLY JSON: {"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fibre_g":number,"group":"none"}
 If the text is not a recognisable food or drink, reply with ONLY: {"unknown":true}`;
 
 // Names that promise (almost) no sugar. "light/lite" is left out: light milk is reduced-fat, not sugar-free.
@@ -45,10 +52,11 @@ function contradictsSugarFree(item, match) {
 export class UnknownFoodError extends Error {}
 
 /**
- * @param items [{ name, grams, unit?, calories?, protein_g?, carbs_g?, fat_g? }] - unit is "g" or "ml"
+ * @param items [{ name, grams, unit?, calories?, protein_g?, carbs_g?, fat_g?, fibre_g?, group? }] - unit is "g" or "ml"
  *        (grams then holds millilitres); the optional
  *        nutrition fields are the vision model's own estimate, used if nothing matches.
- * @returns items with nutrition plus `source` ("afcd" | "usda" | "ai") and `match` (database food name).
+ * @returns items with nutrition plus `source` ("afcd" | "usda" | "ai"), `match` (database food name) and
+ *          `group` ("fruit" | "dried_fruit" | "veg" | null) for fruit and veg serves.
  */
 export async function resolveNutrition(env, ai, items) {
   const candidates = await Promise.all(
@@ -59,7 +67,7 @@ export async function resolveNutrition(env, ai, items) {
     }),
   );
 
-  const picks = await pickMatches(ai, items, candidates);
+  const { picks, groups } = await pickMatches(ai, items, candidates);
 
   return Promise.all(
     items.map(async (item, i) => {
@@ -68,15 +76,19 @@ export async function resolveNutrition(env, ai, items) {
         console.log(`rejected "${match.name}" for sugar-free "${item.name}"`);
         match = undefined;
       }
-      if (match) return fromDatabase(item, match);
-      if (hasEstimate(item)) return { ...normalize(item), source: "ai", match: null };
-      return { ...(await estimate(ai, item)), source: "ai", match: null };
+      // Fruit/veg: AFCD's food group when it matched; otherwise the model's classification.
+      const group = (it) => (match?.source === "afcd" ? match.fv : validGroup(groups.get(i) ?? it.group));
+      if (match) return { ...fromDatabase(item, match), group: group(item) };
+      if (hasEstimate(item)) return { ...normalize(item), source: "ai", match: null, group: group(item) };
+      const estimated = await estimate(ai, item);
+      return { ...estimated, source: "ai", match: null, group: group(estimated) };
     }),
   );
 }
 
 async function pickMatches(ai, items, candidates) {
   const picks = new Map();
+  const groups = new Map();
   const question = items
     .map((item, i) => ({
       i,
@@ -84,7 +96,7 @@ async function pickMatches(ai, items, candidates) {
       candidates: candidates[i].map((c) => ({ id: c.id, name: c.name })),
     }))
     .filter((q) => q.candidates.length);
-  if (!question.length) return picks;
+  if (!question.length) return { picks, groups };
 
   try {
     const response = await ai.run([
@@ -94,11 +106,12 @@ async function pickMatches(ai, items, candidates) {
     const parsed = parseJson(response);
     for (const m of parsed?.matches ?? []) {
       if (Number.isInteger(m?.i) && typeof m.id === "string") picks.set(m.i, m.id);
+      if (Number.isInteger(m?.i) && typeof m.group === "string") groups.set(m.i, m.group);
     }
   } catch (err) {
     console.log("match step failed, falling back to AI estimates:", String(err));
   }
-  return picks;
+  return { picks, groups };
 }
 
 async function estimate(ai, item) {
@@ -125,9 +138,14 @@ function fromDatabase(item, match) {
     protein_g: num(per.protein * f),
     carbs_g: num(per.carbs * f),
     fat_g: num(per.fat * f),
+    fibre_g: num((per.fibre ?? 0) * f),
     source: match.source,
     match: match.name,
   };
+}
+
+function validGroup(g) {
+  return ["fruit", "dried_fruit", "veg"].includes(g) ? g : null;
 }
 
 function unitOf(item) {
@@ -147,5 +165,7 @@ function normalize(item) {
     protein_g: num(item.protein_g),
     carbs_g: num(item.carbs_g),
     fat_g: num(item.fat_g),
+    fibre_g: num(item.fibre_g),
+    group: validGroup(item.group),
   };
 }

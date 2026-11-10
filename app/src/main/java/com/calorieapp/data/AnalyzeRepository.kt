@@ -3,6 +3,7 @@ package com.calorieapp.data
 import com.calorieapp.data.remote.AnalyzeApi
 import com.calorieapp.data.remote.AnalyzeRequest
 import com.calorieapp.data.remote.BarcodeRequest
+import com.calorieapp.data.remote.DescribeRequest
 import com.calorieapp.data.remote.ErrorResponse
 import com.calorieapp.data.remote.LookupRequest
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +45,17 @@ class AnalyzeRepository(
             }
         }
         val response = call { api.analyze(AnalyzeRequest(image = image, mode = mode.wire, provider = provider.wire)) }
+        return AnalyzeOutcome(
+            items = response.items.map { it.toFoodItem() }.filter { it.name.isNotBlank() },
+            aiNote = aiNote(provider, response.provider, response.fallback),
+        )
+    }
+
+    /** A meal described in words -> its foods with amounts and nutrition. */
+    suspend fun describe(text: String): AnalyzeOutcome {
+        val api = api()
+        val provider = currentProvider()
+        val response = call { api.describe(DescribeRequest(text = text, provider = provider.wire)) }
         return AnalyzeOutcome(
             items = response.items.map { it.toFoodItem() }.filter { it.name.isNotBlank() },
             aiNote = aiNote(provider, response.provider, response.fallback),
@@ -100,6 +112,8 @@ class AnalyzeRepository(
             parsed?.error == "unknown food" -> detail.ifEmpty { "That isn't a food I recognise." }
             parsed?.error == "product not found" ->
                 "This product isn't in Open Food Facts yet. Switch to Label and photograph its nutrition panel."
+            parsed?.error == "no food described" ->
+                "Couldn't find any food in that. Try something like \"2 eggs on toast and a flat white\"."
             parsed?.error == "no label" ->
                 "Couldn't read a nutrition panel. Fill the frame with the panel, flat on and in focus."
             isQuota(detail) && "gemini:" in detail && "workers-ai:" in detail ->

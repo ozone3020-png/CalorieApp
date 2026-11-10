@@ -84,7 +84,7 @@ async function callGemini(env, model, messages, maxTokens) {
         },
       }),
       // Give up quickly enough that the fallback provider still answers in reasonable time.
-      signal: AbortSignal.timeout(hasImage ? 35_000 : 20_000),
+      signal: AbortSignal.timeout(hasImage ? 35_000 : 12_000),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {

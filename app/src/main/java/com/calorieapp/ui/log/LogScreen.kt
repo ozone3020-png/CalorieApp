@@ -226,20 +226,41 @@ private fun SummaryCard(totals: NutritionTotals, goals: Goals) {
                 MacroBar("Protein", totals.proteinG, goals.proteinG, MaterialTheme.colorScheme.primary)
                 MacroBar("Carbs", totals.carbsG, goals.carbsG, MaterialTheme.colorScheme.secondary)
                 MacroBar("Fat", totals.fatG, goals.fatG, MaterialTheme.colorScheme.tertiary)
+                MacroBar("Fibre", totals.fibreG, goals.fibreG, MaterialTheme.colorScheme.primary, overIsBad = false)
+            }
+        }
+        // Fruit and veg serves (Australian Dietary Guidelines): goals to reach, not limits.
+        Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(Modifier.weight(1f)) {
+                MacroBar("Fruit", totals.fruitServes, goals.fruitServes, MaterialTheme.colorScheme.secondary, unit = "serves", overIsBad = false)
+            }
+            Box(Modifier.weight(1f)) {
+                MacroBar("Veg", totals.vegServes, goals.vegServes, MaterialTheme.colorScheme.tertiary, unit = "serves", overIsBad = false)
             }
         }
     }
 }
 
 @Composable
-private fun MacroBar(label: String, value: Double, goal: Double, color: Color) {
+private fun MacroBar(
+    label: String,
+    value: Double,
+    goal: Double,
+    color: Color,
+    unit: String = "g",
+    // Fat, carbs and protein are limits (red when over); fibre and fruit/veg serves are targets.
+    overIsBad: Boolean = true,
+) {
     Column {
         Row(Modifier.fillMaxWidth()) {
             Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
             Text(
-                "${value.fmtMacro()} / ${goal.fmtMacro()} g",
+                "${value.fmtMacro()} / ${goal.fmtMacro()} $unit",
                 style = MaterialTheme.typography.labelMedium,
-                color = if (value > goal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (overIsBad && value > goal) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -295,10 +316,12 @@ private fun FoodRow(food: LoggedFood, unit: EnergyUnit, onDelete: () -> Unit) {
             Text(item.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 "${item.grams.fmt()} ${item.unit.label} · P ${item.proteinG.fmt()} · C ${item.carbsG.fmt()} · " +
-                    "F ${item.fatG.fmt()}" + sourceTag(item.source).let { if (it.isEmpty()) "" else " · $it" },
+                    "F ${item.fatG.fmt()} · Fb ${item.fibreG.fmt()}" +
+                    (item.plantGroup?.let { " · ${it.label} ${item.serves.fmt()}" } ?: "") +
+                    sourceTag(item.source).let { if (it.isEmpty()) "" else " · $it" },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }

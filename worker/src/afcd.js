@@ -7,17 +7,20 @@ import { PREP, tokens } from "./text.js";
 // Forms that are rarely what's on a plate; ranked lower unless the query asks for them.
 const UNEATEN_FORMS = ["dry", "uncooked", "powder", "mix", "dehydrated"];
 
+// Fruit/veg serve types (see scripts/build_afcd.py).
+const FV = { f: "fruit", d: "dried_fruit", v: "veg" };
+
 let index; // built lazily, once per isolate
 
 function getIndex() {
   if (!index) {
-    index = RAW.map(([key, name, kcal, protein, fat, carbs, ml]) => {
+    index = RAW.map(([key, name, fv, kcal, protein, fat, carbs, fibre, ml]) => {
       const [head] = name.split(",");
       // "boiled from dry" describes a cooked food; don't let "dry" mark it as an uneaten form.
       const searchable = name.replace(/\bfrom dry\b/gi, "");
       return {
-        key, name, per100: { kcal, protein, fat, carbs },
-        per100ml: ml ? { kcal: ml[0], protein: ml[1], fat: ml[2], carbs: ml[3] } : null,
+        key, name, fv: FV[fv] ?? null, per100: { kcal, protein, fat, carbs, fibre },
+        per100ml: ml ? { kcal: ml[0], protein: ml[1], fat: ml[2], carbs: ml[3], fibre: ml[4] } : null,
         head: new Set(tokens(head, { stopwords: false })),
         all: new Set(tokens(searchable, { stopwords: false })),
       };
@@ -55,6 +58,6 @@ export function searchAfcd(query, limit = 12) {
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit).map(({ food }) => ({
-    source: "afcd", name: food.name, per100: food.per100, per100ml: food.per100ml,
+    source: "afcd", name: food.name, fv: food.fv, per100: food.per100, per100ml: food.per100ml,
   }));
 }

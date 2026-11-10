@@ -3,8 +3,11 @@ Converts the AFCD Release 3 "Nutrient profiles" workbook into src/afcd.json for 
 
     python3 -I scripts/build_afcd.py "data/AFCD Release 3 - Nutrient profiles.xlsx" src/afcd.json
 
-Each entry: [food key, name, kcal, protein g, fat g, available carbohydrate g] per 100 g,
-plus, for the 216 liquids FSANZ also profiles per 100 mL, a 7th element [kcal, protein, fat, carbs] per 100 mL.
+Each entry: [food key, name, fruit/veg group, kcal, protein g, fat g, available carbohydrate g, fibre g] per 100 g,
+plus, for the liquids FSANZ also profiles per 100 mL, a 9th element [kcal, protein, fat, carbs, fibre] per 100 mL.
+
+The fruit/veg group follows the Australian Dietary Guidelines serves: "f" fruit (150 g), "d" dried fruit (30 g),
+"v" vegetables and legumes (75 g), or null. Juices, hot chips and fruit snacks don't count.
 Energy uses FSANZ's "Energy with dietary fibre" (the figure on Australian labels), converted kJ -> kcal.
 
 Data: Food Standards Australia New Zealand (2025). Australian Food Composition Database - Release 3.
@@ -26,7 +29,23 @@ COLUMNS = {
     "protein": "Protein",
     "fat": "Fat, total",
     "carbs": "Available carbohydrate, with sugar alcohols",
+    "fibre": "Total dietary fibre",
+    "classification": "Classification",
 }
+
+
+def fruit_veg_group(classification, name):
+    """AFCD food group -> ADG fruit/veg serve type (see module docstring)."""
+    c, n = str(classification or ""), name.lower()
+    if c.startswith("1680") and c in ("16801", "16802") and "chip" not in n:
+        return "d"
+    if c.startswith("16") and not c.startswith("1680") and "juice only" not in n:
+        return "f"
+    if c.startswith("24") and c != "24102":  # 24102: hot chips, fries, wedges
+        return "v"
+    if c.startswith("25"):  # legumes and pulses count as vegetables
+        return "v"
+    return None
 
 
 def num(v):
@@ -50,24 +69,26 @@ def read_sheet(rows):
     for r in rows[header_row + 1:]:
         get = lambda f: r[idx[f]] if idx[f] < len(r) else None  # noqa: E731
         key, name, kj = get("key"), get("name"), num(get("kj"))
-        out.append((key, name, None if kj is None else [
+        out.append((key, name, get("classification"), None if kj is None else [
             round(kj / 4.184, 1),
             num(get("protein")) or 0,
             num(get("fat")) or 0,
             num(get("carbs")) or 0,
+            num(get("fibre")) or 0,
         ]))
     return out
 
 
 def main(src, dst):
     sheets = xlsx.sheets(src)
-    per_ml = {key: values for key, _, values in read_sheet(sheets[LIQUIDS_SHEET]) if key and values}
+    per_ml = {key: values for key, _, _, values in read_sheet(sheets[LIQUIDS_SHEET]) if key and values}
     foods, skipped = [], 0
-    for key, name, values in read_sheet(sheets[SHEET]):
+    for key, name, classification, values in read_sheet(sheets[SHEET]):
         if not key or not name or values is None:
             skipped += 1
             continue
-        entry = [key, " ".join(name.split()), *values]
+        name = " ".join(name.split())
+        entry = [key, name, fruit_veg_group(classification, name), *values]
         if key in per_ml:
             entry.append(per_ml[key])
         foods.append(entry)

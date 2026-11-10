@@ -43,10 +43,10 @@ class MealRepository(private val dao: MealDao) {
         return dao.insertMealWithEntries(meal, items.map { it.toEntry() })
     }
 
-    /** Replaces the foods of an already-saved meal (it keeps its time and day). */
-    suspend fun replaceMeal(mealId: Long, items: List<FoodItem>) {
+    /** Replaces the foods of an already-saved meal, and moves it to [at] (e.g. breakfast logged at lunchtime). */
+    suspend fun replaceMeal(mealId: Long, items: List<FoodItem>, at: ZonedDateTime) {
         require(items.isNotEmpty()) { "A meal needs at least one item" }
-        dao.replaceEntries(mealId, items.map { it.toEntry() })
+        dao.replaceEntries(mealId, items.map { it.toEntry() }, at.toInstant().toEpochMilli(), at.toLocalDate().toEpochDay())
     }
 
     /** Totals for every day from [from] to [to] (inclusive), with zeros for days nothing was logged. */
@@ -58,7 +58,11 @@ class MealRepository(private val dao: MealDao) {
                 DayTotals(
                     day = day,
                     logged = r != null,
-                    totals = if (r == null) NutritionTotals() else NutritionTotals(r.kcal, r.proteinG, r.carbsG, r.fatG),
+                    totals = if (r == null) {
+                        NutritionTotals()
+                    } else {
+                        NutritionTotals(r.kcal, r.proteinG, r.carbsG, r.fatG, r.fibreG, r.fruitServes, r.vegServes)
+                    },
                 )
             }.toList()
         }
@@ -85,6 +89,8 @@ class MealRepository(private val dao: MealDao) {
                     source = item.source.wireOrNull(),
                     matchName = item.match,
                     addedAt = System.currentTimeMillis(),
+                    fibreG = item.fibreG,
+                    plantGroup = item.plantGroup?.wire,
                 ),
             )
         } else {
@@ -137,6 +143,8 @@ private fun FoodItem.toEntry() = FoodEntryEntity(
     source = source.wireOrNull(),
     matchName = match,
     unit = unit.wire,
+    fibreG = fibreG,
+    plantGroup = plantGroup?.wire,
 )
 
 private fun FoodEntryEntity.toFoodItem() = FoodItem(
@@ -149,6 +157,8 @@ private fun FoodEntryEntity.toFoodItem() = FoodItem(
     source = source?.let(NutritionSource::from) ?: NutritionSource.UNKNOWN,
     match = matchName,
     unit = FoodUnit.from(unit),
+    fibreG = fibreG,
+    plantGroup = PlantGroup.from(plantGroup),
 )
 
 private fun FavouriteFoodEntity.toFoodItem() = FoodItem(
@@ -161,4 +171,6 @@ private fun FavouriteFoodEntity.toFoodItem() = FoodItem(
     source = source?.let(NutritionSource::from) ?: NutritionSource.UNKNOWN,
     match = matchName,
     unit = FoodUnit.from(unit),
+    fibreG = fibreG,
+    plantGroup = PlantGroup.from(plantGroup),
 )

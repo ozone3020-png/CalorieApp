@@ -65,6 +65,10 @@ data class FoodEntryEntity(
     val matchName: String? = null,
     /** "g" or "ml" (schema v3); [grams] holds the amount in this unit. */
     @ColumnInfo(defaultValue = "g") val unit: String = "g",
+    /** Schema v6. 0 for foods logged before fibre was tracked. */
+    @ColumnInfo(defaultValue = "0") val fibreG: Double = 0.0,
+    /** Schema v6: "fruit", "dried_fruit", "veg" or null. */
+    val plantGroup: String? = null,
 )
 
 /** A food the user starred for one-tap logging (schema v4). Identified by name. */
@@ -82,6 +86,8 @@ data class FavouriteFoodEntity(
     val matchName: String?,
     val addedAt: Long,
     @ColumnInfo(defaultValue = "0") val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "0") val fibreG: Double = 0.0,
+    val plantGroup: String? = null,
 ) {
     /** How a favourite is identified for sync: its name, case- and space-insensitive. */
     val syncId get() = favouriteSyncId(name)
@@ -96,6 +102,9 @@ data class DayTotalsRow(
     val proteinG: Double,
     val carbsG: Double,
     val fatG: Double,
+    val fibreG: Double,
+    val fruitServes: Double,
+    val vegServes: Double,
 )
 
 /** A meal with its foods, loaded together. */
@@ -121,6 +130,9 @@ abstract class MealDao {
 
     @Query("DELETE FROM food_entries WHERE id = :entryId")
     protected abstract suspend fun deleteEntryRow(entryId: Long)
+
+    @Query("UPDATE meals SET loggedAt = :loggedAt, epochDay = :epochDay WHERE id = :mealId")
+    protected abstract suspend fun moveMeal(mealId: Long, loggedAt: Long, epochDay: Long)
 
     @Query("UPDATE meals SET updatedAt = :at WHERE id = :mealId")
     protected abstract suspend fun touchMeal(mealId: Long, at: Long = System.currentTimeMillis())
@@ -189,7 +201,8 @@ abstract class MealDao {
 
     /** Replaces a saved meal's foods (keeping its time); used when editing a meal from the log. */
     @Transaction
-    open suspend fun replaceEntries(mealId: Long, entries: List<FoodEntryEntity>) {
+    open suspend fun replaceEntries(mealId: Long, entries: List<FoodEntryEntity>, loggedAt: Long, epochDay: Long) {
+        moveMeal(mealId, loggedAt, epochDay)
         deleteEntriesOf(mealId)
         insertEntries(entries.map { it.copy(id = 0, mealId = mealId) })
         touchMeal(mealId)
@@ -203,7 +216,11 @@ abstract class MealDao {
     @Query(
         """
         SELECT m.epochDay AS epochDay, SUM(e.calories) AS kcal, SUM(e.proteinG) AS proteinG,
-               SUM(e.carbsG) AS carbsG, SUM(e.fatG) AS fatG
+               SUM(e.carbsG) AS carbsG, SUM(e.fatG) AS fatG, SUM(e.fibreG) AS fibreG,
+               -- serve sizes must match PlantGroup.serveGrams
+               SUM(CASE e.plantGroup WHEN 'fruit' THEN e.grams / 150.0 WHEN 'dried_fruit' THEN e.grams / 30.0
+                   ELSE 0 END) AS fruitServes,
+               SUM(CASE e.plantGroup WHEN 'veg' THEN e.grams / 75.0 ELSE 0 END) AS vegServes
         FROM meals m JOIN food_entries e ON e.mealId = m.id
         WHERE m.epochDay BETWEEN :fromDay AND :toDay
         GROUP BY m.epochDay ORDER BY m.epochDay
@@ -329,11 +346,12 @@ abstract class MealDao {
 
 @Database(
     entities = [MealEntity::class, FoodEntryEntity::class, FavouriteFoodEntity::class, TombstoneEntity::class],
-    version = 5,
+    version = 6,
     autoMigrations = [
         AutoMigration(from = 1, to = 2), // v2: food_entries.source, matchName
         AutoMigration(from = 2, to = 3), // v3: food_entries.unit
         AutoMigration(from = 3, to = 4), // v4: favourite_foods
+        AutoMigration(from = 5, to = 6), // v6: fibreG, plantGroup on food_entries and favourite_foods
     ],
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -274,21 +274,24 @@ private fun EnergyBars(
 private fun MacroAverages(state: TrendsState) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Average macros per logged day", style = MaterialTheme.typography.titleMedium)
+            Text("Average per logged day", style = MaterialTheme.typography.titleMedium)
             AverageBar("Protein", state.average.proteinG, state.goals.proteinG, MaterialTheme.colorScheme.primary)
             AverageBar("Carbs", state.average.carbsG, state.goals.carbsG, MaterialTheme.colorScheme.secondary)
             AverageBar("Fat", state.average.fatG, state.goals.fatG, MaterialTheme.colorScheme.tertiary)
+            AverageBar("Fibre", state.average.fibreG, state.goals.fibreG, MaterialTheme.colorScheme.primary)
+            AverageBar("Fruit", state.average.fruitServes, state.goals.fruitServes, MaterialTheme.colorScheme.secondary, "serves")
+            AverageBar("Veg", state.average.vegServes, state.goals.vegServes, MaterialTheme.colorScheme.tertiary, "serves")
         }
     }
 }
 
 @Composable
-private fun AverageBar(label: String, value: Double, goal: Double, color: Color) {
+private fun AverageBar(label: String, value: Double, goal: Double, color: Color, unit: String = "g") {
     Column {
         Row(Modifier.fillMaxWidth()) {
             Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
             Text(
-                "${Math.round(value)} / ${Math.round(goal)} g",
+                if (unit == "g") "${Math.round(value)} / ${Math.round(goal)} g" else "${value.fmt()} / ${goal.fmt()} $unit",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -315,7 +318,8 @@ private fun DayRow(day: DayTotals, goalKcal: Double, unit: EnergyUnit, onClick: 
         Column(Modifier.weight(1f)) {
             Text(day.day.format(DAY), style = MaterialTheme.typography.bodyLarge)
             Text(
-                "P ${t.proteinG.fmt()} · C ${t.carbsG.fmt()} · F ${t.fatG.fmt()} g",
+                "P ${t.proteinG.fmt()} · C ${t.carbsG.fmt()} · F ${t.fatG.fmt()} · Fibre ${t.fibreG.fmt()} g · " +
+                    "Fruit ${t.fruitServes.fmt()} · Veg ${t.vegServes.fmt()}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -3,6 +3,7 @@ package com.calorieapp.data.remote
 import com.calorieapp.data.FoodItem
 import com.calorieapp.data.FoodUnit
 import com.calorieapp.data.NutritionSource
+import com.calorieapp.data.PlantGroup
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import retrofit2.http.Body
@@ -12,6 +13,10 @@ interface AnalyzeApi {
     /** Photo -> detected foods with nutrition. */
     @POST("analyze")
     suspend fun analyze(@Body request: AnalyzeRequest): AnalyzeResponse
+
+    /** A meal described in words ("2 eggs on toast") -> its foods with nutrition. */
+    @POST("describe")
+    suspend fun describe(@Body request: DescribeRequest): AnalyzeResponse
 
     /** Barcode -> the product from Open Food Facts. */
     @POST("barcode")
@@ -47,6 +52,9 @@ data class AnalyzeResponse(
 
 @Serializable
 data class BarcodeRequest(val code: String)
+
+@Serializable
+data class DescribeRequest(val text: String, val provider: String = "workers-ai")
 
 @Serializable
 data class SyncChange(
@@ -96,6 +104,9 @@ data class FoodItemDto(
     val unit: String? = null,
     /** Label mode: set when the transcribed numbers don't hang together. */
     val warning: String? = null,
+    @SerialName("fibre_g") val fibreG: Double = 0.0,
+    /** "fruit", "dried_fruit", "veg" or null. */
+    val group: String? = null,
 ) {
     fun toFoodItem() = FoodItem(
         name = name,
@@ -108,6 +119,8 @@ data class FoodItemDto(
         match = match,
         unit = FoodUnit.from(unit),
         warning = warning,
+        fibreG = fibreG,
+        plantGroup = PlantGroup.from(group),
     )
 }
 

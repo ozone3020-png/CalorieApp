@@ -36,8 +36,8 @@ It's free to run: no subscriptions, no paid APIs and no account. Your log stays 
 
 ### The log (home screen)
 
-Today's energy is shown as a ring against your goal, with protein, carbs and fat bars beneath and every meal
-listed by time (Breakfast, Lunch, …).
+Today's energy is shown as a ring against your goal, with protein, carbs, fat and **fibre** bars, your **fruit
+and veg serves**, and every meal listed by time (Breakfast, Lunch, …).
 
 - **‹ ›** or tap the date to move between days. Anything you add while viewing a past day is logged on that day.
 - **Tap a meal** to edit it: change amounts or names, add or remove foods.
@@ -56,17 +56,25 @@ Tap **Add meal** to open the camera. It has three ways in:
 
 The gallery button (bottom left) uses a photo you've already taken.
 
-Or tap **✎** on the log to **type a food in** ("banana", "flat white", "rice") or pick one of your
-★ **favourites** or **recent** foods for one-tap logging.
+Or tap **✎** on the log to type instead:
+- **A whole meal** in your own words, such as "2 poached eggs on wholemeal toast with half an avocado and a flat white".
+  It's split into foods with amounts, and each one is looked up like a photo would be.
+- **A single food** ("banana", "rice"), looked up on its own.
+- One of your ★ **favourites** or **recent** foods, for one-tap logging.
 
 ### Checking the results
 
 You'll always see what was found before anything is saved:
 
+- **When** sets the meal time. Tap **Breakfast / Lunch / Dinner / Snack**, or pick an exact time and day. Forgot
+  breakfast? Add it at lunchtime and tap Breakfast. Opening a saved meal from the log lets you move it later too.
+
 - **Amounts** are the AI's guess from the photo. Check them: portion size is the biggest source of error.
   Tap **g / mL** to switch units.
 - **Rename** a wrong item (say "mashed potatoes" that was really rice), then tap **Update nutrition** to get the
   new food's numbers. Review them, then **Save**.
+- **Fruit / veg**: each item shows whether it counts towards your fruit or vegetable serves (Australian Dietary
+  Guidelines: 150 g fruit, 30 g dried fruit or 75 g vegetables/legumes per serve). Tap it to correct it.
 - Under each item you can see **where its numbers came from**: *AFCD*, *USDA*, *Label*, *Open Food Facts* or
   *AI estimate*. A red warning means label or barcode numbers didn't add up: check them against the package.
 
@@ -86,7 +94,7 @@ what's left and your macros, and updates as you log.
   limit, the other is used automatically.
 - **Energy unit**: kcal or kJ, used everywhere.
 - **Daily goals**: default to the reference values Australian labels use (8700 kJ, 50 g protein, 310 g carbs,
-  70 g fat). Set your own.
+  70 g fat, 30 g fibre) and the Australian Dietary Guidelines' 2 fruit and 5 veg serves. Set your own.
 - **Server**: leave blank to use the built-in server, or enter [your own](#run-your-own-server-free).
 - **Sync across devices**: see [Privacy](#privacy).
 - **Your data**: **Back up** (a file you save anywhere, e.g. Google Drive), **Restore**, and **Export
@@ -104,6 +112,7 @@ what's left and your macros, and updates as you log.
  label photo (1600 px) ────────► /analyze ──► AI transcribes the panel; numbers are cross-checked
  barcode ──────────────────────► /barcode ──► ──────────────────────────────────────────► Open Food Facts
  typed food ───────────────────► /lookup  ──► same matching as photos
+ typed meal ───────────────────► /describe ─► AI splits it into foods + amounts, then same matching
  encrypted log ────────────────► /sync    ──► stored as unreadable ciphertext ──────────► Cloudflare D1
 ```
 

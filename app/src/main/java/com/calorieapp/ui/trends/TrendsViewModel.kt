@@ -44,6 +44,9 @@ data class TrendsState(
                 proteinG = logged.sumOf { it.totals.proteinG } / n,
                 carbsG = logged.sumOf { it.totals.carbsG } / n,
                 fatG = logged.sumOf { it.totals.fatG } / n,
+                fibreG = logged.sumOf { it.totals.fibreG } / n,
+                fruitServes = logged.sumOf { it.totals.fruitServes } / n,
+                vegServes = logged.sumOf { it.totals.vegServes } / n,
             )
         }
 
