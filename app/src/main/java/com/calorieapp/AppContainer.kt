@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.room.Room
 import com.calorieapp.data.AnalyzeRepository
+import com.calorieapp.data.BackupRepository
 import com.calorieapp.data.MealRepository
 import com.calorieapp.data.SettingsRepository
 import com.calorieapp.data.normalizeServerUrl
@@ -31,6 +32,8 @@ class AppContainer(context: Context) {
     val mealRepository = MealRepository(database.mealDao())
 
     val settingsRepository = SettingsRepository(context)
+
+    val backupRepository = BackupRepository(database, settingsRepository, context.contentResolver)
 
     private val json = Json {
         ignoreUnknownKeys = true

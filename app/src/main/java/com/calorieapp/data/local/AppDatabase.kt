@@ -131,6 +131,17 @@ abstract class MealDao {
         insertEntries(entries.map { it.copy(id = 0, mealId = mealId) })
     }
 
+    @Transaction
+    @Query("SELECT * FROM meals ORDER BY loggedAt")
+    abstract suspend fun getAllMeals(): List<MealWithEntries>
+
+    @Query("SELECT * FROM favourite_foods ORDER BY lower(name)")
+    abstract suspend fun getFavourites(): List<FavouriteFoodEntity>
+
+    /** Whether a meal logged at exactly this time already exists (to skip duplicates when restoring). */
+    @Query("SELECT COUNT(*) FROM meals WHERE loggedAt = :loggedAt")
+    abstract suspend fun countMealsAt(loggedAt: Long): Int
+
     /** Puts back a deleted meal and/or foods with their original ids (for Undo). */
     @Transaction
     open suspend fun restore(meal: MealEntity?, entries: List<FoodEntryEntity>) {

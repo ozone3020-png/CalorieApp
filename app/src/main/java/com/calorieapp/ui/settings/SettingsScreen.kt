@@ -1,6 +1,8 @@
 package com.calorieapp.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -197,6 +199,10 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                 }
             }
 
+            Section("Your data") {
+                DataSection(vm)
+            }
+
             Section("About") {
                 Text("Calorie App ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
                 Text(
@@ -230,6 +236,60 @@ private fun isChanged(vm: SettingsViewModel): Boolean {
         vm.serverUrl.trim() != s.serverUrl.orEmpty() ||
         goals == null ||
         GoalFields.from(goals, vm.energyUnit) != GoalFields.from(s.goals, vm.energyUnit)
+}
+
+@Composable
+private fun DataSection(vm: SettingsViewModel) {
+    val today = java.time.LocalDate.now()
+    var confirmRestore by rememberSaveable { mutableStateOf(false) }
+    // The system file picker: the user chooses where files go (Downloads, Google Drive, …). No permissions needed.
+    val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        uri?.let(vm::exportCsv)
+    }
+    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        uri?.let(vm::backUp)
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(vm::restore)
+    }
+
+    if (confirmRestore) {
+        AlertDialog(
+            onDismissRequest = { confirmRestore = false },
+            title = { Text("Restore a backup?") },
+            text = {
+                Text(
+                    "Meals from the backup are added to your log (any already here are skipped). " +
+                        "Your goals and settings are replaced with the ones in the backup.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmRestore = false
+                    restoreLauncher.launch(arrayOf("application/json", "application/octet-stream", "text/plain"))
+                }) { Text("Choose backup file") }
+            },
+            dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
+        )
+    }
+
+    Text(
+        "Your log is stored only on this phone. Back it up to keep it safe if the phone is lost or reset, " +
+            "or to move it to another phone.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(onClick = { backupLauncher.launch("calorie-app-backup-$today.json") }, enabled = !vm.dataBusy) {
+            Text("Back up")
+        }
+        OutlinedButton(onClick = { confirmRestore = true }, enabled = !vm.dataBusy) { Text("Restore") }
+    }
+    OutlinedButton(onClick = { csvLauncher.launch("calorie-log-$today.csv") }, enabled = !vm.dataBusy) {
+        Text("Export spreadsheet (CSV)")
+    }
+    if (vm.dataBusy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+    vm.dataMessage?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
 }
 
 @Composable

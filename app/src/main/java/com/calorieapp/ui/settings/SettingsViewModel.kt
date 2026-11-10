@@ -11,7 +11,10 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.calorieapp.CalorieApplication
 import com.calorieapp.data.AnalyzeException
 import com.calorieapp.data.AiProvider
+import android.net.Uri
 import com.calorieapp.data.AnalyzeRepository
+import com.calorieapp.data.BackupException
+import com.calorieapp.data.BackupRepository
 import com.calorieapp.data.EnergyUnit
 import com.calorieapp.data.Goals
 import com.calorieapp.data.SettingsRepository
@@ -56,8 +59,52 @@ sealed interface ServerCheck {
 class SettingsViewModel(
     private val settings: SettingsRepository,
     private val analyze: AnalyzeRepository,
+    private val backup: BackupRepository,
     val defaultServerUrl: String,
 ) : ViewModel() {
+
+    /** Result of the last export / backup / restore, shown under the buttons. */
+    var dataMessage by mutableStateOf<String?>(null)
+        private set
+    var dataBusy by mutableStateOf(false)
+        private set
+
+    fun exportCsv(uri: Uri) = dataTask { "Exported ${backup.writeCsv(uri)} foods to a spreadsheet file." }
+
+    fun backUp(uri: Uri) = dataTask { "Backed up ${backup.writeBackup(uri)} meals, your favourites and settings." }
+
+    fun restore(uri: Uri) = dataTask {
+        val r = backup.restore(uri)
+        // Restored settings change what's on screen here too.
+        settings.settings.first().let { s ->
+            loaded = s
+            energyUnit = s.energyUnit
+            aiProvider = s.aiProvider
+            goalFields = GoalFields.from(s.goals, s.energyUnit)
+            exactEnergyKcal = s.goals.kcal
+        }
+        buildString {
+            append("Restored ${r.mealsAdded} meal${if (r.mealsAdded == 1) "" else "s"}")
+            if (r.mealsSkipped > 0) append(" (${r.mealsSkipped} already in your log)")
+            append(", ${r.favourites} favourite${if (r.favourites == 1) "" else "s"}")
+            if (r.settingsRestored) append(" and your settings")
+            append(".")
+        }
+    }
+
+    private fun dataTask(block: suspend () -> String) {
+        dataBusy = true
+        dataMessage = null
+        viewModelScope.launch {
+            dataMessage = try {
+                block()
+            } catch (e: BackupException) {
+                e.message
+            } finally {
+                dataBusy = false
+            }
+        }
+    }
 
     var loaded by mutableStateOf<UserSettings?>(null)
         private set
@@ -165,7 +212,7 @@ class SettingsViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val c = (this[APPLICATION_KEY] as CalorieApplication).container
-                SettingsViewModel(c.settingsRepository, c.analyzeRepository, c.defaultServerUrl)
+                SettingsViewModel(c.settingsRepository, c.analyzeRepository, c.backupRepository, c.defaultServerUrl)
             }
         }
     }
