@@ -1,7 +1,7 @@
 // Turns food names + weights into nutrition: AFCD first, USDA second, AI estimate last.
 import { searchAfcd } from "./afcd.js";
 import { searchUsda } from "./usda.js";
-import { num, parseJson, runModel } from "./model.js";
+import { num, parseJson } from "./model.js";
 
 const AFCD_CANDIDATES = 12;
 const USDA_CANDIDATES = 5;
@@ -50,7 +50,7 @@ export class UnknownFoodError extends Error {}
  *        nutrition fields are the vision model's own estimate, used if nothing matches.
  * @returns items with nutrition plus `source` ("afcd" | "usda" | "ai") and `match` (database food name).
  */
-export async function resolveNutrition(env, items) {
+export async function resolveNutrition(env, ai, items) {
   const candidates = await Promise.all(
     items.map(async (item) => {
       const afcd = searchAfcd(item.name, AFCD_CANDIDATES).map((c, j) => ({ ...c, id: `A${j + 1}` }));
@@ -59,7 +59,7 @@ export async function resolveNutrition(env, items) {
     }),
   );
 
-  const picks = await pickMatches(env, items, candidates);
+  const picks = await pickMatches(ai, items, candidates);
 
   return Promise.all(
     items.map(async (item, i) => {
@@ -70,12 +70,12 @@ export async function resolveNutrition(env, items) {
       }
       if (match) return fromDatabase(item, match);
       if (hasEstimate(item)) return { ...normalize(item), source: "ai", match: null };
-      return { ...(await estimate(env, item)), source: "ai", match: null };
+      return { ...(await estimate(ai, item)), source: "ai", match: null };
     }),
   );
 }
 
-async function pickMatches(env, items, candidates) {
+async function pickMatches(ai, items, candidates) {
   const picks = new Map();
   const question = items
     .map((item, i) => ({
@@ -87,7 +87,7 @@ async function pickMatches(env, items, candidates) {
   if (!question.length) return picks;
 
   try {
-    const response = await runModel(env, [
+    const response = await ai.run([
       { role: "system", content: MATCH_PROMPT },
       { role: "user", content: JSON.stringify({ items: question }) },
     ], 512);
@@ -101,8 +101,8 @@ async function pickMatches(env, items, candidates) {
   return picks;
 }
 
-async function estimate(env, item) {
-  const response = await runModel(env, [
+async function estimate(ai, item) {
+  const response = await ai.run([
     { role: "system", content: ESTIMATE_PROMPT },
     { role: "user", content: `${item.grams} ${unitOf(item) === "ml" ? "mL" : "g"} of ${item.name}` },
   ], 200);

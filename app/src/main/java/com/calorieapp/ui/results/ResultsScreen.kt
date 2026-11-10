@@ -76,6 +76,7 @@ import com.calorieapp.ui.meal.MealOrigin
 fun ResultsScreen(
     origin: MealOrigin,
     hasUnsavedWork: Boolean,
+    aiNote: String?,
     items: List<EditableFoodItem>,
     recentFoods: List<FoodItem>,
     favourites: List<FoodItem>,
@@ -237,6 +238,17 @@ fun ResultsScreen(
                 }
                 item(key = "add") {
                     AddFoodButton(onClick = { focusManager.clearFocus(); showAddFood = true }, enabled = !isSaving)
+                }
+                if (aiNote != null) {
+                    item(key = "ai-note") {
+                        Text(
+                            aiNote,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (aiNote.contains("unavailable")) MaterialTheme.colorScheme.tertiary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                        )
+                    }
                 }
                 item(key = "credits") {
                     Text(

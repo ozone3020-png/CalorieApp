@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.calorieapp.CalorieApplication
 import com.calorieapp.data.AnalyzeException
+import com.calorieapp.data.AiProvider
 import com.calorieapp.data.AnalyzeRepository
 import com.calorieapp.data.EnergyUnit
 import com.calorieapp.data.Goals
@@ -62,6 +63,8 @@ class SettingsViewModel(
         private set
     var energyUnit by mutableStateOf(EnergyUnit.KCAL)
         private set
+    var aiProvider by mutableStateOf(AiProvider.WORKERS_AI)
+        private set
     var goalFields by mutableStateOf(GoalFields("", "", "", ""))
         private set
     var serverUrl by mutableStateOf("")
@@ -82,6 +85,7 @@ class SettingsViewModel(
             val s = settings.settings.first()
             loaded = s
             energyUnit = s.energyUnit
+            aiProvider = s.aiProvider
             goalFields = GoalFields.from(s.goals, s.energyUnit)
             exactEnergyKcal = s.goals.kcal
             serverUrl = s.serverUrl.orEmpty()
@@ -105,6 +109,11 @@ class SettingsViewModel(
         val kcal = exactEnergyKcal ?: goalFields.energy.toPositive()?.let(energyUnit::toKcal)
         energyUnit = unit
         if (kcal != null) goalFields = goalFields.copy(energy = Math.round(unit.fromKcal(kcal)).toString())
+        saved = false
+    }
+
+    fun selectAiProvider(provider: AiProvider) {
+        aiProvider = provider
         saved = false
     }
 
@@ -145,6 +154,7 @@ class SettingsViewModel(
         if (!serverUrlValid) return
         viewModelScope.launch {
             settings.setEnergyUnit(energyUnit)
+            settings.setAiProvider(aiProvider)
             settings.setGoals(goals)
             settings.setServerUrl(serverUrl.ifBlank { null })
             saved = true

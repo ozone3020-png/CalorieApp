@@ -6,8 +6,11 @@
 // POST /lookup  { name: "rice", grams: 180, unit?: "g" | "ml" }
 //   -> { item: { name, grams, calories, protein_g, carbs_g, fat_g, source, match } }
 //
+// Requests that use AI accept provider: "workers-ai" (default) | "gemini" — the one to try first; the other is
+// the fallback. Responses then include provider (the one that answered) and fallback: true if it wasn't the first.
+//
 // source: "afcd" (Australian Food Composition Database), "usda" (USDA FoodData Central) or "ai" (model estimate).
-import { num, parseJson, runModel } from "./model.js";
+import { makeAi, num, parseJson, PROVIDERS } from "./model.js";
 import { resolveNutrition, UnknownFoodError } from "./nutrition.js";
 import { LABEL_PROMPT, labelToItem } from "./label.js";
 import { lookupBarcode } from "./barcode.js";
@@ -56,9 +59,10 @@ async function analyze(body, env) {
   const mime = typeof body.mime_type === "string" ? body.mime_type : "image/jpeg";
   if (!image) return json({ error: "missing 'image' (base64)" }, 400);
   if (image.length > MAX_IMAGE_BASE64_CHARS) return json({ error: "image too large" }, 413);
-  if (body.mode === "label") return analyzeLabel(body, env, image, mime);
+  const ai = makeAi(env, providerOf(body));
+  if (body.mode === "label") return analyzeLabel(body, ai, env, image, mime);
 
-  const response = await runModel(env, [
+  const response = await ai.run([
     { role: "system", content: VISION_PROMPT },
     {
       role: "user",
@@ -79,14 +83,15 @@ async function analyze(body, env) {
     .slice(0, MAX_ITEMS)
     .map((it) => ({ ...it, name: it.name.trim() }));
 
-  return json({ items: await resolveNutrition(env, detected) });
+  const items = await resolveNutrition(env, ai, detected);
+  return json({ items, ...aiInfo(ai) });
 }
 
-async function analyzeLabel(body, env, image, mime) {
+async function analyzeLabel(body, ai, env, image, mime) {
   // Model override is for comparing models on a local `wrangler dev` only (ALLOW_MODEL_OVERRIDE is never deployed).
   const override = env.ALLOW_MODEL_OVERRIDE && typeof body.model === "string" ? body.model : null;
-  const model = override ?? env.LABEL_MODEL ?? env.MODEL;
-  const response = await runModel(env, [
+  const model = override ?? env.LABEL_MODEL ?? env.MODEL; // Workers AI model; Gemini uses GEMINI_MODEL
+  const response = await ai.run([
     { role: "system", content: LABEL_PROMPT },
     {
       role: "user",
@@ -95,7 +100,7 @@ async function analyzeLabel(body, env, image, mime) {
         { type: "image_url", image_url: { url: `data:${mime};base64,${image}` } },
       ],
     },
-  ], 700, model);
+  ], 700, { model });
 
   const parsed = parseJson(response);
   const item = labelToItem(parsed);
@@ -103,7 +108,7 @@ async function analyzeLabel(body, env, image, mime) {
   if (!item) {
     return json({ error: "no label", detail: "Couldn't read a nutrition panel in this photo.", ...debug }, 422);
   }
-  return json({ items: [item], ...debug });
+  return json({ items: [item], ...aiInfo(ai), ...debug });
 }
 
 async function barcode(body) {
@@ -127,12 +132,22 @@ async function lookup(body, env) {
 
   try {
     const unit = body.unit === "ml" ? "ml" : "g";
-    const [item] = await resolveNutrition(env, [{ name, grams, unit }]);
-    return json({ item });
+    const ai = makeAi(env, providerOf(body));
+    const [item] = await resolveNutrition(env, ai, [{ name, grams, unit }]);
+    return json({ item, ...aiInfo(ai) });
   } catch (err) {
     if (err instanceof UnknownFoodError) return json({ error: "unknown food", detail: err.message }, 404);
     throw err;
   }
+}
+
+function providerOf(body) {
+  return PROVIDERS.includes(body.provider) ? body.provider : "workers-ai";
+}
+
+/** Which AI answered (null if none was needed, e.g. every food matched without asking a model). */
+function aiInfo(ai) {
+  return { provider: ai.provider, fallback: ai.fellBack };
 }
 
 function json(obj, status = 200) {

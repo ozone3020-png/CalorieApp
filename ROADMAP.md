@@ -76,8 +76,10 @@ no paid APIs, no Play Store fee.
 - [x] Closing only asks to confirm when something would be lost
 
 ### Phase 4 — Choice of AI model
-- [ ] Settings choice: free Llama (Workers AI) vs Gemini API free tier (key as a Worker secret)
-- [ ] Automatic fallback when a provider hits its daily limit
+- [x] Settings choice: Llama 4 Scout (Workers AI) vs Gemini Flash (Google free tier, key as Worker secret
+      `GEMINI_API_KEY`, model `GEMINI_MODEL`, default gemini-2.5-flash); sent as `provider` on each request
+- [x] Automatic fallback to the other provider on any failure (limit, outage, no key); results say which AI ran
+- [ ] Test Gemini for real once the key is set: meal photos, the Monster label, lookups; compare with Llama
 
 ### Phase 5 — Sharing with friends
 - [ ] Signed release APK to send directly (no Play Store)

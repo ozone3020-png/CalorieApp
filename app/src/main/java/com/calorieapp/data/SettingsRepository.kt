@@ -23,6 +23,16 @@ enum class EnergyUnit(val label: String) {
     }
 }
 
+/** Which AI the Worker tries first; the other one is the automatic fallback. */
+enum class AiProvider(val wire: String, val label: String) {
+    WORKERS_AI("workers-ai", "Llama 4 Scout"),
+    GEMINI("gemini", "Gemini Flash");
+
+    companion object {
+        fun from(wire: String?) = entries.firstOrNull { it.wire == wire }
+    }
+}
+
 /** Daily targets. Energy in kcal. */
 data class Goals(
     val kcal: Double,
@@ -44,6 +54,7 @@ data class UserSettings(
     val goals: Goals = Goals.AU_REFERENCE,
     /** Overrides the built-in Worker URL when set (e.g. a friend's own Worker). */
     val serverUrl: String? = null,
+    val aiProvider: AiProvider = AiProvider.WORKERS_AI,
 )
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -53,6 +64,8 @@ class SettingsRepository(private val context: Context) {
     val settings: Flow<UserSettings> = context.dataStore.data.map { it.toSettings() }
 
     suspend fun setEnergyUnit(unit: EnergyUnit) = context.dataStore.edit { it[ENERGY_UNIT] = unit.name }
+
+    suspend fun setAiProvider(provider: AiProvider) = context.dataStore.edit { it[AI_PROVIDER] = provider.wire }
 
     suspend fun setGoals(goals: Goals) = context.dataStore.edit {
         it[GOAL_KCAL] = goals.kcal
@@ -79,6 +92,7 @@ class SettingsRepository(private val context: Context) {
                 fatG = this[GOAL_FAT] ?: defaults.fatG,
             ),
             serverUrl = this[SERVER_URL],
+            aiProvider = AiProvider.from(this[AI_PROVIDER]) ?: AiProvider.WORKERS_AI,
         )
     }
 
@@ -89,6 +103,7 @@ class SettingsRepository(private val context: Context) {
         val GOAL_CARBS = doublePreferencesKey("goal_carbs_g")
         val GOAL_FAT = doublePreferencesKey("goal_fat_g")
         val SERVER_URL = stringPreferencesKey("server_url")
+        val AI_PROVIDER = stringPreferencesKey("ai_provider")
     }
 }
 

@@ -141,6 +141,7 @@ private fun CalorieNavHost() {
                 ResultsScreen(
                     origin = meal.origin,
                     hasUnsavedWork = meal.hasUnsavedWork,
+                    aiNote = meal.aiNote,
                     items = meal.editItems,
                     recentFoods = recentFoods,
                     favourites = favourites,

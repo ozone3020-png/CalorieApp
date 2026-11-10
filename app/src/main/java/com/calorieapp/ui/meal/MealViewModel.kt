@@ -61,6 +61,10 @@ class MealViewModel(
 
     var isSaving by mutableStateOf(false)
         private set
+
+    /** Which AI analysed the photo, e.g. "Gemini Flash was unavailable, so Llama 4 Scout was used." */
+    var aiNote by mutableStateOf<String?>(null)
+        private set
     var saveError by mutableStateOf<String?>(null)
         private set
 
@@ -181,7 +185,9 @@ class MealViewModel(
         _state.value = AnalysisState.Loading
         job = viewModelScope.launch {
             _state.value = try {
-                val items = if (code != null) analyzeRepository.barcode(code) else analyzeRepository.analyze(file!!, mode)
+                val outcome = if (code != null) analyzeRepository.barcode(code) else analyzeRepository.analyze(file!!, mode)
+                val items = outcome.items
+                aiNote = outcome.aiNote
                 if (items.isEmpty()) {
                     AnalysisState.Error("No food found in this photo. Try a closer, well-lit shot.", canRetry = false)
                 } else {
@@ -278,6 +284,7 @@ class MealViewModel(
         photo?.delete()
         photo = null
         barcode = null
+        aiNote = null
         editItems.clear()
         saveError = null
         _state.value = AnalysisState.Idle

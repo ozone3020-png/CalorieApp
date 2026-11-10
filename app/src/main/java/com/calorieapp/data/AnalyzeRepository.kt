@@ -17,14 +17,19 @@ import java.net.SocketTimeoutException
 /** A failure with a message that is safe to show the user as-is. */
 class AnalyzeException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
+/** Foods found, plus a note about which AI did it (e.g. after a fallback). */
+data class AnalyzeOutcome(val items: List<FoodItem>, val aiNote: String?)
+
 class AnalyzeRepository(
     private val apiFor: (baseUrl: String) -> AnalyzeApi,
     private val currentServerUrl: suspend () -> String,
+    private val currentProvider: suspend () -> AiProvider,
     private val json: Json,
 ) {
     /** Photo -> detected foods with nutrition; in [ScanMode.LABEL], the one product on the panel. */
-    suspend fun analyze(photo: File, mode: ScanMode = ScanMode.MEAL): List<FoodItem> {
+    suspend fun analyze(photo: File, mode: ScanMode = ScanMode.MEAL): AnalyzeOutcome {
         val api = api()
+        val provider = currentProvider()
         // Labels need more pixels: the print is small and phone photos of cans are tall and narrow.
         val maxSide = if (mode == ScanMode.LABEL) 1600 else 1024
         val image = withContext(Dispatchers.Default) {
@@ -38,22 +43,25 @@ class AnalyzeRepository(
                 throw AnalyzeException(UNREADABLE_PHOTO, e)
             }
         }
-        return call { api.analyze(AnalyzeRequest(image = image, mode = mode.wire)) }
-            .items
-            .map { it.toFoodItem() }
-            .filter { it.name.isNotBlank() }
+        val response = call { api.analyze(AnalyzeRequest(image = image, mode = mode.wire, provider = provider.wire)) }
+        return AnalyzeOutcome(
+            items = response.items.map { it.toFoodItem() }.filter { it.name.isNotBlank() },
+            aiNote = aiNote(provider, response.provider, response.fallback),
+        )
     }
 
     /** A scanned barcode -> the product from Open Food Facts. */
-    suspend fun barcode(code: String): List<FoodItem> {
+    suspend fun barcode(code: String): AnalyzeOutcome {
         val api = api()
-        return call { api.barcode(BarcodeRequest(code)) }.items.map { it.toFoodItem() }
+        return AnalyzeOutcome(call { api.barcode(BarcodeRequest(code)) }.items.map { it.toFoodItem() }, aiNote = null)
     }
 
     /** Nutrition for [amount] [unit] of the food called [name] (AFCD, then USDA, then AI estimate). */
     suspend fun lookup(name: String, amount: Double, unit: FoodUnit, serverUrl: String? = null): FoodItem {
         val api = api(serverUrl)
-        return call { api.lookup(LookupRequest(name = name, grams = amount, unit = unit.wire)) }.item.toFoodItem()
+        val provider = currentProvider().wire
+        return call { api.lookup(LookupRequest(name = name, grams = amount, unit = unit.wire, provider = provider)) }
+            .item.toFoodItem()
     }
 
     /** Checks that [serverUrl] is a working calorie-analyzer Worker (a cheap, text-only lookup). */
@@ -91,11 +99,24 @@ class AnalyzeRepository(
                 "This product isn't in Open Food Facts yet. Switch to Label and photograph its nutrition panel."
             parsed?.error == "no label" ->
                 "Couldn't read a nutrition panel. Fill the frame with the panel, flat on and in focus."
-            // Workers AI daily free allowance used up (error 3036 / "neurons" in the message).
-            "3036" in detail || "neuron" in detail.lowercase() ->
-                "Today's free analysis allowance is used up. It resets at 00:00 UTC."
+            isQuota(detail) && "gemini:" in detail && "workers-ai:" in detail ->
+                "Both free AI allowances are used up for now. Scan a barcode or type the food in instead, or try later."
+            // Workers AI's daily allowance (error 3036 / "neurons") or Gemini's free-tier limit (HTTP 429).
+            isQuota(detail) -> "The free AI allowance is used up for now. Try again later."
             parsed?.error != null -> "Server error: ${parsed.error}"
             else -> "Server error (HTTP ${e.code()})."
+        }
+    }
+
+    private fun isQuota(detail: String) =
+        "3036" in detail || "neuron" in detail.lowercase() || "429" in detail || "free-tier limit" in detail
+
+    private fun aiNote(preferred: AiProvider, used: String?, fallback: Boolean): String? {
+        val usedProvider = AiProvider.from(used) ?: return null
+        return if (fallback) {
+            "${preferred.label} was unavailable, so ${usedProvider.label} was used."
+        } else {
+            "Analysed with ${usedProvider.label}."
         }
     }
 

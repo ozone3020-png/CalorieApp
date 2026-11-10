@@ -28,16 +28,24 @@ data class AnalyzeRequest(
     @SerialName("mime_type") val mimeType: String = "image/jpeg",
     /** "meal" or "label". */
     val mode: String = "meal",
+    /** AI to try first: "workers-ai" or "gemini". */
+    val provider: String = "workers-ai",
 )
 
 @Serializable
-data class AnalyzeResponse(val items: List<FoodItemDto> = emptyList())
+data class AnalyzeResponse(
+    val items: List<FoodItemDto> = emptyList(),
+    /** The AI that answered, if one was used. */
+    val provider: String? = null,
+    /** True when the preferred AI failed and the other one was used. */
+    val fallback: Boolean = false,
+)
 
 @Serializable
 data class BarcodeRequest(val code: String)
 
 @Serializable
-data class LookupRequest(val name: String, val grams: Double, val unit: String = "g")
+data class LookupRequest(val name: String, val grams: Double, val unit: String = "g", val provider: String = "workers-ai")
 
 @Serializable
 data class LookupResponse(val item: FoodItemDto)

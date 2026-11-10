@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.calorieapp.BuildConfig
+import com.calorieapp.data.AiProvider
 import com.calorieapp.data.EnergyUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,6 +103,35 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                         }
                     }
                 }
+            }
+
+            Section("AI model") {
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    AiProvider.entries.forEachIndexed { i, provider ->
+                        SegmentedButton(
+                            selected = vm.aiProvider == provider,
+                            onClick = { vm.selectAiProvider(provider) },
+                            shape = SegmentedButtonDefaults.itemShape(i, AiProvider.entries.size),
+                        ) { Text(provider.label) }
+                    }
+                }
+                Text(
+                    when (vm.aiProvider) {
+                        AiProvider.WORKERS_AI ->
+                            "Meta's open model on Cloudflare Workers AI. Free daily allowance (resets 00:00 UTC)."
+                        AiProvider.GEMINI ->
+                            "Google's Gemini on its free API tier: usually more accurate at identifying food and " +
+                                "reading labels. Google may use free-tier requests to improve its products."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Used for photos, labels and foods not in the databases. If it's unavailable or over its " +
+                        "free limit, the other one is used automatically. Barcodes don't use AI.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             Section("Daily goals") {
@@ -176,8 +206,8 @@ fun SettingsScreen(vm: SettingsViewModel, onBack: () -> Unit) {
                         "• U.S. Department of Agriculture, FoodData Central (public domain).\n" +
                         "• Barcodes: Open Food Facts (openfoodfacts.org), Open Database License. Crowd-sourced: " +
                         "check numbers against the package.\n" +
-                        "• Foods found in neither are estimated by an AI model (Llama 4 Scout via Cloudflare " +
-                        "Workers AI) and marked \"AI estimate\".",
+                        "• Foods found in neither are estimated by the AI model chosen above (Llama 4 Scout on " +
+                        "Cloudflare Workers AI, or Google Gemini) and marked \"AI estimate\".",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -196,6 +226,7 @@ private fun isChanged(vm: SettingsViewModel): Boolean {
     val s = vm.loaded ?: return false
     val goals = vm.goalFields.parse(vm.energyUnit)
     return vm.energyUnit != s.energyUnit ||
+        vm.aiProvider != s.aiProvider ||
         vm.serverUrl.trim() != s.serverUrl.orEmpty() ||
         goals == null ||
         GoalFields.from(goals, vm.energyUnit) != GoalFields.from(s.goals, vm.energyUnit)

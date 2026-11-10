@@ -67,6 +67,7 @@ class AppContainer(context: Context) {
     val analyzeRepository = AnalyzeRepository(
         apiFor = ::apiFor,
         currentServerUrl = { settingsRepository.settings.first().serverUrl ?: defaultServerUrl },
+        currentProvider = { settingsRepository.settings.first().aiProvider },
         json = json,
     )
 }
