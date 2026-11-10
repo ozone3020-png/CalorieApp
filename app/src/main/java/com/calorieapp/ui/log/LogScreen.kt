@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Settings
@@ -94,6 +95,7 @@ fun LogScreen(
     onTypeFood: () -> Unit,
     onEditMeal: (LoggedMeal) -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenTrends: () -> Unit,
     onDeleteMeal: (LoggedMeal) -> Unit,
     onDeleteFood: (LoggedFood) -> Unit,
     onUndo: (PendingUndo) -> Unit,
@@ -134,6 +136,9 @@ fun LogScreen(
                 actions = {
                     IconButton(onClick = onNextDay, enabled = !state.isToday) {
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next day")
+                    }
+                    IconButton(onClick = onOpenTrends) {
+                        Icon(Icons.Filled.BarChart, contentDescription = "Trends")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")

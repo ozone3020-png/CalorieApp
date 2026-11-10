@@ -22,6 +22,9 @@ data class LoggedMeal(
 
 data class LoggedFood(val id: Long, val mealId: Long, val item: FoodItem)
 
+/** One day in a trend: its totals, and whether anything was logged at all. */
+data class DayTotals(val day: LocalDate, val logged: Boolean, val totals: NutritionTotals)
+
 /** Snapshot of something deleted from the log, so it can be put back. */
 class DeletedFromLog internal constructor(
     internal val meal: MealEntity?,
@@ -45,6 +48,20 @@ class MealRepository(private val dao: MealDao) {
         require(items.isNotEmpty()) { "A meal needs at least one item" }
         dao.replaceEntries(mealId, items.map { it.toEntry() })
     }
+
+    /** Totals for every day from [from] to [to] (inclusive), with zeros for days nothing was logged. */
+    fun observeDailyTotals(from: LocalDate, to: LocalDate): Flow<List<DayTotals>> =
+        dao.observeDailyTotals(from.toEpochDay(), to.toEpochDay()).map { rows ->
+            val byDay = rows.associateBy { it.epochDay }
+            generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.map { day ->
+                val r = byDay[day.toEpochDay()]
+                DayTotals(
+                    day = day,
+                    logged = r != null,
+                    totals = if (r == null) NutritionTotals() else NutritionTotals(r.kcal, r.proteinG, r.carbsG, r.fatG),
+                )
+            }.toList()
+        }
 
     /** The latest version of each food logged recently, newest first. */
     fun observeRecentFoods(limit: Int = 30): Flow<List<FoodItem>> =

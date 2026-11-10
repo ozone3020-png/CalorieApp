@@ -30,10 +30,13 @@ import com.calorieapp.ui.results.ResultsScreen
 import com.calorieapp.ui.settings.SettingsScreen
 import com.calorieapp.ui.settings.SettingsViewModel
 import com.calorieapp.ui.theme.CalorieAppTheme
+import com.calorieapp.ui.trends.TrendsScreen
+import com.calorieapp.ui.trends.TrendsViewModel
 import kotlinx.serialization.Serializable
 
 @Serializable object LogRoute
 @Serializable object SettingsRoute
+@Serializable object TrendsRoute
 @Serializable object CameraRoute
 @Serializable object AnalyzeRoute
 @Serializable object ResultsRoute
@@ -95,10 +98,24 @@ private fun CalorieNavHost() {
                     nav.navigate(ResultsRoute)
                 },
                 onOpenSettings = { nav.navigate(SettingsRoute) },
+                onOpenTrends = { nav.navigate(TrendsRoute) },
                 onDeleteMeal = { log.deleteMeal(it) },
                 onDeleteFood = { log.deleteFood(it) },
                 onUndo = { log.undoDelete(it) },
                 onUndoShown = log::undoShown,
+            )
+        }
+        composable<TrendsRoute> {
+            val vm: TrendsViewModel = viewModel(factory = TrendsViewModel.Factory)
+            val state by vm.state.collectAsStateWithLifecycle()
+            TrendsScreen(
+                state = state,
+                onRangeChange = vm::selectRange,
+                onOpenDay = { day ->
+                    log.showDay(day)
+                    nav.popBackStack(LogRoute, inclusive = false)
+                },
+                onBack = { nav.popBackStack() },
             )
         }
         composable<SettingsRoute> {

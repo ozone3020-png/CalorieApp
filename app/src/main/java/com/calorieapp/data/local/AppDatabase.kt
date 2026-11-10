@@ -71,6 +71,15 @@ data class FavouriteFoodEntity(
     val addedAt: Long,
 )
 
+/** One day's totals (query result). */
+data class DayTotalsRow(
+    val epochDay: Long,
+    val kcal: Double,
+    val proteinG: Double,
+    val carbsG: Double,
+    val fatG: Double,
+)
+
 /** A meal with its foods, loaded together. */
 data class MealWithEntries(
     @Embedded val meal: MealEntity,
@@ -134,6 +143,18 @@ abstract class MealDao {
     @Transaction
     @Query("SELECT * FROM meals ORDER BY loggedAt")
     abstract suspend fun getAllMeals(): List<MealWithEntries>
+
+    /** Totals per logged day between two days (inclusive); days with nothing logged are absent. */
+    @Query(
+        """
+        SELECT m.epochDay AS epochDay, SUM(e.calories) AS kcal, SUM(e.proteinG) AS proteinG,
+               SUM(e.carbsG) AS carbsG, SUM(e.fatG) AS fatG
+        FROM meals m JOIN food_entries e ON e.mealId = m.id
+        WHERE m.epochDay BETWEEN :fromDay AND :toDay
+        GROUP BY m.epochDay ORDER BY m.epochDay
+        """,
+    )
+    abstract fun observeDailyTotals(fromDay: Long, toDay: Long): Flow<List<DayTotalsRow>>
 
     @Query("SELECT * FROM favourite_foods ORDER BY lower(name)")
     abstract suspend fun getFavourites(): List<FavouriteFoodEntity>
