@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Calorie App</string>
+    <string name="widget_name">Today\'s calories</string>
+    <string name="widget_description">Today\'s energy and macros against your goals</string>
 </resources>

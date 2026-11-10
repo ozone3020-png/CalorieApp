@@ -115,6 +115,10 @@ dependencies {
     // Barcode scanning via Google Play services: its own scanner screen, no camera permission needed
     implementation(libs.play.services.code.scanner)
 
+    // Home-screen widget
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
+
     // Settings (goals, energy unit, server URL)
     implementation(libs.androidx.datastore.preferences)
 

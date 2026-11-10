@@ -1,6 +1,17 @@
 package com.calorieapp
 
 import android.app.Application
+import androidx.glance.appwidget.updateAll
+import com.calorieapp.widget.CalorieWidget
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import java.time.LocalDate
 import android.content.Context
 import androidx.room.Room
 import com.calorieapp.data.AnalyzeRepository
@@ -21,8 +32,22 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+@OptIn(FlowPreview::class)
 class CalorieApplication : Application() {
     val container by lazy { AppContainer(this) }
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    override fun onCreate() {
+        super.onCreate()
+        // Keep the home-screen widget current: refresh it whenever today's log or the settings change.
+        appScope.launch {
+            combine(container.mealRepository.observeDay(LocalDate.now()), container.settingsRepository.settings) { m, s -> m to s }
+                .drop(1) // the first value is just the current state
+                .debounce(500)
+                .collect { CalorieWidget().updateAll(this@CalorieApplication) }
+        }
+    }
 }
 
 /** Hand-rolled dependency container. */
