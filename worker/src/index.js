@@ -36,6 +36,15 @@ const MAX_ITEMS = 12;
 export default {
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
+    // Local `wrangler dev` only (ALLOW_MODEL_OVERRIDE is never deployed): list the Gemini models the key can use.
+    if (pathname === "/dev/gemini-models" && env.ALLOW_MODEL_OVERRIDE) {
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+        headers: { "x-goog-api-key": env.GEMINI_API_KEY ?? "" },
+      });
+      const data = await res.json();
+      return json((data.models ?? []).filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+        .map((m) => m.name));
+    }
     const route = { "/analyze": analyze, "/lookup": lookup, "/barcode": barcode }[pathname];
     if (!route) return json({ error: "not found" }, 404);
     if (request.method !== "POST") return json({ error: "use POST" }, 405);
@@ -59,7 +68,7 @@ async function analyze(body, env) {
   const mime = typeof body.mime_type === "string" ? body.mime_type : "image/jpeg";
   if (!image) return json({ error: "missing 'image' (base64)" }, 400);
   if (image.length > MAX_IMAGE_BASE64_CHARS) return json({ error: "image too large" }, 413);
-  const ai = makeAi(env, providerOf(body));
+  const ai = makeAi(env, providerOf(body), devOptions(env, body));
   if (body.mode === "label") return analyzeLabel(body, ai, env, image, mime);
 
   const response = await ai.run([
@@ -132,13 +141,18 @@ async function lookup(body, env) {
 
   try {
     const unit = body.unit === "ml" ? "ml" : "g";
-    const ai = makeAi(env, providerOf(body));
+    const ai = makeAi(env, providerOf(body), devOptions(env, body));
     const [item] = await resolveNutrition(env, ai, [{ name, grams, unit }]);
     return json({ item, ...aiInfo(ai) });
   } catch (err) {
     if (err instanceof UnknownFoodError) return json({ error: "unknown food", detail: err.message }, 404);
     throw err;
   }
+}
+
+/** Local `wrangler dev` only: try a specific Gemini model. */
+function devOptions(env, body) {
+  return env.ALLOW_MODEL_OVERRIDE && typeof body.gemini_model === "string" ? { geminiModel: body.gemini_model } : {};
 }
 
 function providerOf(body) {

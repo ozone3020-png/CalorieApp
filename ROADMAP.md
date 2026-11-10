@@ -77,9 +77,12 @@ no paid APIs, no Play Store fee.
 
 ### Phase 4 — Choice of AI model
 - [x] Settings choice: Llama 4 Scout (Workers AI) vs Gemini Flash (Google free tier, key as Worker secret
-      `GEMINI_API_KEY`, model `GEMINI_MODEL`, default gemini-2.5-flash); sent as `provider` on each request
+      `GEMINI_API_KEY`); sent as `provider` on each request
 - [x] Automatic fallback to the other provider on any failure (limit, outage, no key); results say which AI ran
-- [ ] Test Gemini for real once the key is set: meal photos, the Monster label, lookups; compare with Llama
+- [x] Tested (10 Nov 2026). gemini-2.5-flash is retired for new keys; 3.7/3.8-flash timed out on the free
+      tier; **gemini-3.5-flash** answers in 2–7 s. `GEMINI_MODEL = "gemini-3.5-flash,gemini-3.8-flash"`
+      (tried in order on 404/503). Spaghetti photo: Gemini 556 kcal (200 g pasta, bolognese as one sauce)
+      vs Llama 989 kcal (300 g pasta, 50 g parmesan); both read the Monster label exactly; Gemini 3–5x faster.
 
 ### Phase 5 — Sharing with friends
 - [ ] Signed release APK to send directly (no Play Store)

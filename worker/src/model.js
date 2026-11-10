@@ -8,7 +8,7 @@ export const PROVIDERS = ["workers-ai", "gemini"];
  * the other provider is tried, and later calls in the same request start with whichever worked.
  * `ai.provider` is the provider that answered the first call; `ai.fellBack` says the preferred one failed.
  */
-export function makeAi(env, preferred = "workers-ai") {
+export function makeAi(env, preferred = "workers-ai", defaults = {}) {
   const order = (preferred === "gemini" ? ["gemini", "workers-ai"] : ["workers-ai", "gemini"])
     .filter((p) => p !== "gemini" || env.GEMINI_API_KEY);
   const ai = {
@@ -24,7 +24,7 @@ export function makeAi(env, preferred = "workers-ai") {
       const errors = [];
       for (const p of [...order]) {
         try {
-          const text = await CALL[p](env, messages, maxTokens, opts);
+          const text = await CALL[p](env, messages, maxTokens, { ...defaults, ...opts });
           if (!ai.provider) ai.provider = p;
           if (p !== preferred) ai.fellBack = true;
           const i = order.indexOf(p);
@@ -47,8 +47,24 @@ const CALL = {
     return result?.response;
   },
 
-  gemini: async (env, messages, maxTokens) => {
-    const model = env.GEMINI_MODEL ?? "gemini-2.5-flash";
+  gemini: async (env, messages, maxTokens, opts) => {
+    const models = (opts.geminiModel ?? env.GEMINI_MODEL ?? "gemini-3.5-flash").split(",").map((m) => m.trim());
+    let lastError;
+    for (const model of models) {
+      try {
+        return await callGemini(env, model, messages, maxTokens);
+      } catch (err) {
+        lastError = err;
+        // Retired or overloaded: the next model may work. Anything else (quota, timeout): give up on Gemini.
+        if (!/HTTP (404|503)/.test(String(err))) break;
+      }
+    }
+    throw lastError;
+  },
+};
+
+async function callGemini(env, model, messages, maxTokens) {
+    const hasImage = messages.some((m) => Array.isArray(m.content) && m.content.some((p) => p.type === "image_url"));
     const system = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
     const contents = messages
       .filter((m) => m.role !== "system")
@@ -67,18 +83,18 @@ const CALL = {
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
-      signal: AbortSignal.timeout(60_000),
+      // Give up quickly enough that the fallback provider still answers in reasonable time.
+      signal: AbortSignal.timeout(hasImage ? 35_000 : 20_000),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const quota = res.status === 429 ? " (free-tier limit reached)" : "";
-      throw new Error(`Gemini HTTP ${res.status}${quota}: ${body?.error?.message ?? ""}`.slice(0, 400));
+      throw new Error(`Gemini ${model} HTTP ${res.status}${quota}: ${body?.error?.message ?? ""}`.slice(0, 400));
     }
     const text = body?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("");
     if (!text) throw new Error(`Gemini returned no text (${body?.candidates?.[0]?.finishReason ?? "unknown"})`);
     return text;
-  },
-};
+}
 
 function toGeminiParts(content) {
   if (typeof content === "string") return [{ text: content }];

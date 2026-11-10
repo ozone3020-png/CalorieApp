@@ -11,3 +11,7 @@ binding = "AI"
 #   @cf/mistralai/mistral-small-3.1-24b-instruct
 #   @cf/google/gemma-3-12b-it
 MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
+# Google Gemini (free API tier). Needs the GEMINI_API_KEY secret. Comma-separated, tried in order when a model
+# is retired (404) or overloaded (503). Chosen 10 Nov 2026: 3.5-flash answered in 2-7 s; 3.7/3.8-flash were
+# timing out on the free tier. Google retires models for new keys, so check the error text if Gemini stops working.
+GEMINI_MODEL = "gemini-3.5-flash,gemini-3.8-flash"
