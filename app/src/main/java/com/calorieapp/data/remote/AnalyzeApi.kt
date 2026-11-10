@@ -22,6 +22,8 @@ interface AnalyzeApi {
 data class AnalyzeRequest(
     val image: String,
     @SerialName("mime_type") val mimeType: String = "image/jpeg",
+    /** "meal" or "label". */
+    val mode: String = "meal",
 )
 
 @Serializable
@@ -47,6 +49,8 @@ data class FoodItemDto(
     val match: String? = null,
     /** "g" or "ml"; the amount in [grams] is in this unit. */
     val unit: String? = null,
+    /** Label mode: set when the transcribed numbers don't hang together. */
+    val warning: String? = null,
 ) {
     fun toFoodItem() = FoodItem(
         name = name,
@@ -58,6 +62,7 @@ data class FoodItemDto(
         source = NutritionSource.from(source),
         match = match,
         unit = FoodUnit.from(unit),
+        warning = warning,
     )
 }
 

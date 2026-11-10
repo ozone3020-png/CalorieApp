@@ -368,6 +368,7 @@ internal fun mealLabel(time: LocalTime): String = when {
 private fun sourceTag(source: NutritionSource) = when (source) {
     NutritionSource.AI -> "AI est."
     NutritionSource.UNKNOWN -> ""
+    NutritionSource.LABEL -> "Label"
     else -> source.label
 }
 

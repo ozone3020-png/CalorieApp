@@ -91,8 +91,8 @@ private fun CalorieNavHost() {
         composable<CameraRoute> {
             CameraScreen(
                 modifier = Modifier.fillMaxSize(),
-                onPhotoConfirmed = { file ->
-                    meal.analyze(file)
+                onPhotoConfirmed = { file, mode ->
+                    meal.analyze(file, mode)
                     nav.navigate(AnalyzeRoute)
                 },
             )
@@ -101,6 +101,7 @@ private fun CalorieNavHost() {
             AnalyzeScreen(
                 photo = meal.photo,
                 state = mealState,
+                mode = meal.mode,
                 onSuccess = {
                     nav.navigate(ResultsRoute) { popUpTo<AnalyzeRoute> { inclusive = true } }
                 },

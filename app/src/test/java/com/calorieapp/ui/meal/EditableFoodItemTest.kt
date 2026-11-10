@@ -101,4 +101,13 @@ class EditableFoodItemTest {
         assertEquals(FoodUnit.GRAMS, EditableFoodItem(1, cola, unit = FoodUnit.GRAMS).current!!.unit)
         assertEquals(FoodUnit.GRAMS, EditableFoodItem(1, spaghetti).unit)
     }
+
+    @Test fun `renaming a label item keeps the label's numbers`() {
+        val can = FoodItem("GUARANA", 500.0, 14.0, 0.0, 7.0, 0.0, NutritionSource.LABEL, "Nutrition label: …", FoodUnit.MILLILITRES)
+        val renamed = EditableFoodItem(1, can, name = "Monster Ultra")
+        assertFalse(renamed.needsLookup)
+        assertEquals("Monster Ultra", renamed.current!!.name)
+        assertEquals(14.0, renamed.current!!.calories, 1e-9)
+        assertEquals(5.6, EditableFoodItem(1, can, gramsText = "200").current!!.calories, 1e-9)
+    }
 }

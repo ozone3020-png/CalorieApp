@@ -309,6 +309,13 @@ private fun SourceLine(item: EditableFoodItem) {
                 style = style,
                 color = MaterialTheme.colorScheme.tertiary,
             )
+            item.original.source == NutritionSource.LABEL -> Column {
+                // match holds e.g. "Nutrition label: 12 kJ / 2.9 kcal per 100 mL, serving 500 mL"
+                Text(item.original.match.orEmpty(), style = style, color = muted)
+                item.original.warning?.let {
+                    Text(it, style = style, color = MaterialTheme.colorScheme.error)
+                }
+            }
             else -> Text(
                 "${item.original.source.label} · ${item.original.match.orEmpty()}",
                 style = style,

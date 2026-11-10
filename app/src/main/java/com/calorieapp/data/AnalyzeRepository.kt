@@ -21,12 +21,14 @@ class AnalyzeRepository(
     private val currentServerUrl: suspend () -> String,
     private val json: Json,
 ) {
-    /** Photo -> detected foods with nutrition. */
-    suspend fun analyze(photo: File): List<FoodItem> {
+    /** Photo -> detected foods with nutrition; in [ScanMode.LABEL], the one product on the panel. */
+    suspend fun analyze(photo: File, mode: ScanMode = ScanMode.MEAL): List<FoodItem> {
         val api = api()
+        // Labels need more pixels: the print is small and phone photos of cans are tall and narrow.
+        val maxSide = if (mode == ScanMode.LABEL) 1600 else 1024
         val image = withContext(Dispatchers.Default) {
             try {
-                ImageEncoder.encodeForUpload(photo)
+                ImageEncoder.encodeForUpload(photo, maxSide = maxSide)
             } catch (e: IOException) {
                 throw AnalyzeException(UNREADABLE_PHOTO, e)
             } catch (e: IllegalArgumentException) {
@@ -35,7 +37,7 @@ class AnalyzeRepository(
                 throw AnalyzeException(UNREADABLE_PHOTO, e)
             }
         }
-        return call { api.analyze(AnalyzeRequest(image = image)) }
+        return call { api.analyze(AnalyzeRequest(image = image, mode = mode.wire)) }
             .items
             .map { it.toFoodItem() }
             .filter { it.name.isNotBlank() }
@@ -78,6 +80,8 @@ class AnalyzeRepository(
         val detail = parsed?.detail.orEmpty()
         return when {
             parsed?.error == "unknown food" -> detail.ifEmpty { "That isn't a food I recognise." }
+            parsed?.error == "no label" ->
+                "Couldn't read a nutrition panel. Fill the frame with the panel, flat on and in focus."
             // Workers AI daily free allowance used up (error 3036 / "neurons" in the message).
             "3036" in detail || "neuron" in detail.lowercase() ->
                 "Today's free analysis allowance is used up. It resets at 00:00 UTC."

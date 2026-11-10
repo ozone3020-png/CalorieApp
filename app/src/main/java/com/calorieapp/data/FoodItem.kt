@@ -6,6 +6,9 @@ enum class NutritionSource(val label: String) {
     USDA("USDA"),
     AI("AI estimate"),
 
+    /** Read from the product's nutrition information panel. */
+    LABEL("Label"),
+
     /** Saved before sources were recorded (database v1). */
     UNKNOWN("");
 
@@ -13,9 +16,16 @@ enum class NutritionSource(val label: String) {
         fun from(value: String?) = when (value?.lowercase()) {
             "afcd" -> AFCD
             "usda" -> USDA
+            "label" -> LABEL
             else -> AI
         }
     }
+}
+
+/** What a photo shows: a plate of food, or a product's nutrition information panel. */
+enum class ScanMode(val wire: String) {
+    MEAL("meal"),
+    LABEL("label"),
 }
 
 /** Unit of an item's amount. Drinks are measured in millilitres. */
@@ -43,6 +53,8 @@ data class FoodItem(
     val source: NutritionSource = NutritionSource.AI,
     val match: String? = null,
     val unit: FoodUnit = FoodUnit.GRAMS,
+    /** Set when label numbers look inconsistent; shown to the user, not saved. */
+    val warning: String? = null,
 ) {
     /**
      * The same food at a different portion size: nutrition scales linearly with weight.

@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.calorieapp.data.ScanMode
 import com.calorieapp.ui.meal.AnalysisState
 import java.io.File
 
@@ -36,6 +37,7 @@ import java.io.File
 fun AnalyzeScreen(
     photo: File?,
     state: AnalysisState,
+    mode: ScanMode,
     onSuccess: () -> Unit,
     onRetry: () -> Unit,
     onRetake: () -> Unit,
@@ -89,7 +91,7 @@ fun AnalyzeScreen(
                 else -> {
                     CircularProgressIndicator(color = Color.White)
                     Spacer(Modifier.height(20.dp))
-                    Text("Analysing your meal…", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    Text(if (mode == ScanMode.LABEL) "Reading the label…" else "Analysing your meal…", color = Color.White, style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(4.dp))
                     Text(
                         "This usually takes 5–20 seconds",

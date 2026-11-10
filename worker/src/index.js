@@ -1,11 +1,13 @@
 // POST /analyze { image: "<base64 jpeg>", mime_type?: "image/jpeg" }
 //   -> { items: [{ name, grams, calories, protein_g, carbs_g, fat_g, source, match }] }
+//   with mode: "label" -> reads a nutrition information panel instead: one item, source "label", maybe a `warning`
 // POST /lookup  { name: "rice", grams: 180, unit?: "g" | "ml" }
 //   -> { item: { name, grams, calories, protein_g, carbs_g, fat_g, source, match } }
 //
 // source: "afcd" (Australian Food Composition Database), "usda" (USDA FoodData Central) or "ai" (model estimate).
 import { num, parseJson, runModel } from "./model.js";
 import { resolveNutrition, UnknownFoodError } from "./nutrition.js";
+import { LABEL_PROMPT, labelToItem } from "./label.js";
 
 const VISION_PROMPT = `You identify food in meal photos. List each distinct food item.
 For each item:
@@ -51,6 +53,7 @@ async function analyze(body, env) {
   const mime = typeof body.mime_type === "string" ? body.mime_type : "image/jpeg";
   if (!image) return json({ error: "missing 'image' (base64)" }, 400);
   if (image.length > MAX_IMAGE_BASE64_CHARS) return json({ error: "image too large" }, 413);
+  if (body.mode === "label") return analyzeLabel(body, env, image, mime);
 
   const response = await runModel(env, [
     { role: "system", content: VISION_PROMPT },
@@ -74,6 +77,30 @@ async function analyze(body, env) {
     .map((it) => ({ ...it, name: it.name.trim() }));
 
   return json({ items: await resolveNutrition(env, detected) });
+}
+
+async function analyzeLabel(body, env, image, mime) {
+  // Model override is for comparing models on a local `wrangler dev` only (ALLOW_MODEL_OVERRIDE is never deployed).
+  const override = env.ALLOW_MODEL_OVERRIDE && typeof body.model === "string" ? body.model : null;
+  const model = override ?? env.LABEL_MODEL ?? env.MODEL;
+  const response = await runModel(env, [
+    { role: "system", content: LABEL_PROMPT },
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Transcribe this nutrition information panel." },
+        { type: "image_url", image_url: { url: `data:${mime};base64,${image}` } },
+      ],
+    },
+  ], 700, model);
+
+  const parsed = parseJson(response);
+  const item = labelToItem(parsed);
+  const debug = override ? { raw: parsed ?? String(response ?? "").slice(0, 800) } : {};
+  if (!item) {
+    return json({ error: "no label", detail: "Couldn't read a nutrition panel in this photo.", ...debug }, 422);
+  }
+  return json({ items: [item], ...debug });
 }
 
 async function lookup(body, env) {

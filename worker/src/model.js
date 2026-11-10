@@ -1,7 +1,7 @@
 // Workers AI calls and tolerant JSON extraction from model output.
 
-export async function runModel(env, messages, maxTokens = 1024) {
-  const result = await env.AI.run(env.MODEL, { messages, max_tokens: maxTokens, temperature: 0.1 });
+export async function runModel(env, messages, maxTokens = 1024, model = env.MODEL) {
+  const result = await env.AI.run(model, { messages, max_tokens: maxTokens, temperature: 0.1 });
   return result?.response;
 }
 

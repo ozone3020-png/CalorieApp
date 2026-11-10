@@ -30,10 +30,8 @@ no paid APIs, no Play Store fee.
 
 ### Known gaps
 
-- Nutrition-label photos give wrong results. The meal prompt doesn't read labels. Several label photos
-  have been tried through the app. Test case kept outside the repo: Monster Ultra can, 500 mL.
-  Per serving: 60 kJ / 14 Cal, protein 0, fat 0, carbs 7.0 g. Per 100 mL: 12 kJ / 3 Cal, carbs 1.4 g.
-  The rows are skewed on the curved can.
+- Label mode is tested on one real label so far (Monster Ultra can, 500 mL: 60 kJ / 14 Cal, carbs 7.0 g
+  per serving; rows skewed on the curved can). It reads it exactly. The photo is kept outside the repo.
 - Portion sizes are the photo model's guess, so the amount field needs checking.
 - Switching g ↔ mL relabels without rescaling (assumes ~1 g/mL).
 - The Worker URL is open; anyone with it could use up the free daily allowance.
@@ -59,10 +57,14 @@ no paid APIs, no Play Store fee.
       Server URL with Test connection, About with FSANZ/USDA credits
 
 ### Phase 1 — Packaged foods & drinks
-- [ ] Pick a photo from the gallery as well as taking one (also makes testing with saved images easy)
-- [ ] **Label mode**: Meal / Label switch; read per-100 g/mL column + serving size; default one serving;
+- [x] Pick a photo from the gallery as well as taking one (Android photo picker, no permission needed)
+- [x] **Label mode**: Meal / Label switch; read per-100 g/mL column + serving size; default one serving;
       warn when energy doesn't match 4P + 4C + 9F. Compare free vision models (Llama 4 Scout,
       Gemma 3, Mistral Small 3.1) on real label photos before choosing one
+      → Done. On the Monster can, Llama 4 Scout and Mistral Small read every value correctly at 1600 px
+        (1024 px misread sugars); Gemma 3 isn't available to this account. Kept Llama 4 Scout, labels
+        upload at 1600 px. Renaming a label item keeps the label's numbers. More label photos would help
+        confirm the choice.
 - [ ] **Barcode scanning**: ML Kit (on-device, free) + Open Food Facts (free, no key) for packaged items;
       label mode as fallback when a product isn't listed
 

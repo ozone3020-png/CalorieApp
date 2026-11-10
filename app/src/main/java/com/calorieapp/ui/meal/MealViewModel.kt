@@ -16,6 +16,7 @@ import com.calorieapp.data.AnalyzeRepository
 import com.calorieapp.data.FoodItem
 import com.calorieapp.data.FoodUnit
 import com.calorieapp.data.MealRepository
+import com.calorieapp.data.ScanMode
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -72,8 +73,12 @@ class MealViewModel(
     private val lookupJobs = mutableMapOf<Long, Job>()
     private var nextKey = 0L
 
-    fun analyze(file: File) {
+    var mode by mutableStateOf(ScanMode.MEAL)
+        private set
+
+    fun analyze(file: File, mode: ScanMode) {
         photo = file
+        this.mode = mode
         retry()
     }
 
@@ -83,7 +88,7 @@ class MealViewModel(
         _state.value = AnalysisState.Loading
         job = viewModelScope.launch {
             _state.value = try {
-                val items = analyzeRepository.analyze(file)
+                val items = analyzeRepository.analyze(file, mode)
                 if (items.isEmpty()) {
                     AnalysisState.Error("No food found in this photo. Try a closer, well-lit shot.", canRetry = false)
                 } else {

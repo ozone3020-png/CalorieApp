@@ -2,6 +2,7 @@ package com.calorieapp.ui.meal
 
 import com.calorieapp.data.FoodItem
 import com.calorieapp.data.FoodUnit
+import com.calorieapp.data.NutritionSource
 
 /** Progress of fetching nutrition for a renamed item. */
 sealed interface LookupState {
@@ -31,8 +32,13 @@ data class EditableFoodItem(
     val isGramsValid get() = grams != null
     val isValid get() = isNameValid && isGramsValid
 
-    /** True when the typed name differs from the food the nutrition belongs to. */
-    val needsLookup get() = isNameValid && !name.trim().equals(original.name.trim(), ignoreCase = true)
+    /**
+     * True when the typed name differs from the food the nutrition belongs to. Label items never need a
+     * lookup: their numbers come from the package itself, and the name read off it is often just a slogan.
+     */
+    val needsLookup
+        get() = original.source != NutritionSource.LABEL &&
+            isNameValid && !name.trim().equals(original.name.trim(), ignoreCase = true)
 
     /** Weight to look a renamed food up at: the typed weight, else the original, else 100 g. */
     val lookupGrams get() = grams ?: original.grams.takeIf { it > 0.0 } ?: 100.0
