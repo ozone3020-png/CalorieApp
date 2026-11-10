@@ -36,7 +36,7 @@ https://www.foodstandards.gov.au/science-data/food-nutrient-databases/afcd/data-
 Attribution: Food Standards Australia New Zealand (2025). *Australian Food Composition Database – Release 3*.
 Licensed by FSANZ under a licence based on CC BY-SA 3.0 AU.
 `src/afcd.json` is a derivative of that database and is distributed under the same licence (CC BY-SA 3.0 AU);
-the rest of this repository is not covered by it.
+the rest of this repository is under the MIT License (see `LICENSE`).
 
 ## Test
 
