@@ -60,7 +60,9 @@ import com.calorieapp.data.NutritionSource
 import com.calorieapp.data.NutritionTotals
 import com.calorieapp.data.totals
 import com.calorieapp.ui.common.fmt
-import com.calorieapp.ui.common.fmtWhole
+import com.calorieapp.ui.common.LocalEnergyUnit
+import com.calorieapp.ui.common.energyNumber
+import com.calorieapp.ui.common.energyText
 import com.calorieapp.ui.meal.EditableFoodItem
 import com.calorieapp.ui.meal.LookupState
 
@@ -268,7 +270,7 @@ private fun FoodItemEditor(
                 if (current == null) {
                     "Enter an amount between 1 and ${EditableFoodItem.MAX_GRAMS.toInt()} ${item.unit.label}"
                 } else {
-                    "${current.calories.fmtWhole()} kcal · P ${current.proteinG.fmt()} g · " +
+                    "${energyText(current.calories, LocalEnergyUnit.current)} · P ${current.proteinG.fmt()} g · " +
                         "C ${current.carbsG.fmt()} g · F ${current.fatG.fmt()} g"
                 },
                 style = MaterialTheme.typography.bodyMedium,
@@ -328,7 +330,8 @@ private fun TotalsCard(totals: NutritionTotals) {
             Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Stat("Calories", totals.calories.fmtWhole())
+            val unit = LocalEnergyUnit.current
+            Stat("Energy (${unit.label})", energyNumber(totals.calories, unit))
             Stat("Protein", "${totals.proteinG.fmt()} g")
             Stat("Carbs", "${totals.carbsG.fmt()} g")
             Stat("Fat", "${totals.fatG.fmt()} g")

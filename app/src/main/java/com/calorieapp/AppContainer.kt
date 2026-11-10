@@ -5,14 +5,18 @@ import android.content.Context
 import androidx.room.Room
 import com.calorieapp.data.AnalyzeRepository
 import com.calorieapp.data.MealRepository
+import com.calorieapp.data.SettingsRepository
+import com.calorieapp.data.normalizeServerUrl
 import com.calorieapp.data.local.AppDatabase
 import com.calorieapp.data.remote.AnalyzeApi
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class CalorieApplication : Application() {
@@ -25,13 +29,16 @@ class AppContainer(context: Context) {
 
     val mealRepository = MealRepository(database.mealDao())
 
+    val settingsRepository = SettingsRepository(context)
+
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
         coerceInputValues = true
     }
 
-    private val baseUrl = BuildConfig.WORKER_URL.let { if (it.endsWith("/")) it else "$it/" }
+    /** The Worker URL built into this APK (gradle.properties WORKER_URL); Settings can override it. */
+    val defaultServerUrl: String = normalizeServerUrl(BuildConfig.WORKER_URL) ?: BuildConfig.WORKER_URL
 
     private val okHttp = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -45,15 +52,21 @@ class AppContainer(context: Context) {
         }
         .build()
 
-    private val retrofit = Retrofit.Builder()
-        .baseUrl(baseUrl)
-        .client(okHttp)
-        .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-        .build()
+    /** One Retrofit client per server URL (normally just one). */
+    private val apis = ConcurrentHashMap<String, AnalyzeApi>()
+
+    private fun apiFor(baseUrl: String): AnalyzeApi = apis.getOrPut(baseUrl) {
+        Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(okHttp)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(AnalyzeApi::class.java)
+    }
 
     val analyzeRepository = AnalyzeRepository(
-        api = retrofit.create(AnalyzeApi::class.java),
+        apiFor = ::apiFor,
+        currentServerUrl = { settingsRepository.settings.first().serverUrl ?: defaultServerUrl },
         json = json,
-        isConfigured = "YOUR-SUBDOMAIN" !in baseUrl,
     )
 }

@@ -3,6 +3,10 @@ package com.calorieapp.data.local
 import androidx.room.AutoMigration
 import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
+import androidx.room.Query
+import androidx.room.Relation
+import kotlinx.coroutines.flow.Flow
 import androidx.room.Database
 import androidx.room.Entity
 import androidx.room.ForeignKey
@@ -50,8 +54,37 @@ data class FoodEntryEntity(
     @ColumnInfo(defaultValue = "g") val unit: String = "g",
 )
 
+/** A meal with its foods, loaded together. */
+data class MealWithEntries(
+    @Embedded val meal: MealEntity,
+    @Relation(parentColumn = "id", entityColumn = "mealId")
+    val entries: List<FoodEntryEntity>,
+)
+
 @Dao
 abstract class MealDao {
+    /** All meals logged on [epochDay], newest first; re-emits whenever the data changes. */
+    @Transaction
+    @Query("SELECT * FROM meals WHERE epochDay = :epochDay ORDER BY loggedAt DESC")
+    abstract fun observeDay(epochDay: Long): Flow<List<MealWithEntries>>
+
+    @Transaction
+    @Query("SELECT * FROM meals WHERE id = :mealId")
+    abstract suspend fun getMeal(mealId: Long): MealWithEntries?
+
+    @Query("DELETE FROM meals WHERE id = :mealId") // food_entries go too (ON DELETE CASCADE)
+    abstract suspend fun deleteMeal(mealId: Long)
+
+    @Query("DELETE FROM food_entries WHERE id = :entryId")
+    abstract suspend fun deleteEntry(entryId: Long)
+
+    /** Puts back a deleted meal and/or foods with their original ids (for Undo). */
+    @Transaction
+    open suspend fun restore(meal: MealEntity?, entries: List<FoodEntryEntity>) {
+        if (meal != null) insertMeal(meal)
+        insertEntries(entries)
+    }
+
     @Insert
     protected abstract suspend fun insertMeal(meal: MealEntity): Long
 

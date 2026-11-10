@@ -17,13 +17,13 @@ import java.net.SocketTimeoutException
 class AnalyzeException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 class AnalyzeRepository(
-    private val api: AnalyzeApi,
+    private val apiFor: (baseUrl: String) -> AnalyzeApi,
+    private val currentServerUrl: suspend () -> String,
     private val json: Json,
-    private val isConfigured: Boolean,
 ) {
     /** Photo -> detected foods with nutrition. */
     suspend fun analyze(photo: File): List<FoodItem> {
-        ensureConfigured()
+        val api = api()
         val image = withContext(Dispatchers.Default) {
             try {
                 ImageEncoder.encodeForUpload(photo)
@@ -42,15 +42,22 @@ class AnalyzeRepository(
     }
 
     /** Nutrition for [amount] [unit] of the food called [name] (AFCD, then USDA, then AI estimate). */
-    suspend fun lookup(name: String, amount: Double, unit: FoodUnit): FoodItem {
-        ensureConfigured()
+    suspend fun lookup(name: String, amount: Double, unit: FoodUnit, serverUrl: String? = null): FoodItem {
+        val api = api(serverUrl)
         return call { api.lookup(LookupRequest(name = name, grams = amount, unit = unit.wire)) }.item.toFoodItem()
     }
 
-    private fun ensureConfigured() {
-        if (!isConfigured) {
-            throw AnalyzeException("Server not set up. Put your worker URL in WORKER_URL in gradle.properties and rebuild.")
+    /** Checks that [serverUrl] is a working calorie-analyzer Worker (a cheap, text-only lookup). */
+    suspend fun testServer(serverUrl: String) {
+        lookup("apple", 100.0, FoodUnit.GRAMS, serverUrl)
+    }
+
+    private suspend fun api(serverUrl: String? = null): AnalyzeApi {
+        val url = serverUrl ?: currentServerUrl()
+        if ("YOUR-SUBDOMAIN" in url) {
+            throw AnalyzeException("Server not set up. Enter your Worker's URL in Settings.")
         }
+        return apiFor(url)
     }
 
     private suspend fun <T> call(request: suspend () -> T): T = try {

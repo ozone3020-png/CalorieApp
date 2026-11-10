@@ -17,6 +17,9 @@ For each item pick the ONE candidate id that best represents the food as eaten.
 - When the variety isn't stated, pick the plainest, most common one
   (e.g. white bread for "toast", white rice for "rice", full-fat milk for "milk").
 - Prefer generic entries over brand-name or restaurant-chain entries.
+- Respect sugar-free variants: an item called zero, diet, sugar free, no sugar, low carb or "max" must
+  match a sugar-free / diet / intense-sweetened / low-carb entry, never a regular sugared one.
+  If there is no such candidate, use null.
 - If no candidate is a reasonable match, use null.
 
 Reply with ONLY JSON: {"matches":[{"i":0,"id":"A3"},{"i":1,"id":null}]}`;
@@ -24,6 +27,19 @@ Reply with ONLY JSON: {"matches":[{"i":0,"id":"A3"},{"i":1,"id":null}]}`;
 const ESTIMATE_PROMPT = `You are a nutrition estimator. Estimate nutrition for the given weight of the food as typically eaten.
 Reply with ONLY JSON: {"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number}
 If the text is not a recognisable food or drink, reply with ONLY: {"unknown":true}`;
+
+// Names that promise (almost) no sugar. "light/lite" is left out: light milk is reduced-fat, not sugar-free.
+const SUGAR_FREE = /\b(zero|diet|sugar[- ]?free|no sugar|low[- ]?carb|max|intense(ly)? sweetened|unsweetened)\b/i;
+
+/**
+ * Hard guard on top of the model's choice: a sugar-free item must not get a sugary entry's numbers
+ * (e.g. "Monster Energy Zero Ultra" matched to a regular 235 kcal Monster).
+ */
+function contradictsSugarFree(item, match) {
+  if (!SUGAR_FREE.test(item.name) || SUGAR_FREE.test(match.name)) return false;
+  const per = unitOf(item) === "ml" && match.per100ml ? match.per100ml : match.per100;
+  return per.carbs > 2.5;
+}
 
 /** Thrown when a typed name isn't a recognisable food. */
 export class UnknownFoodError extends Error {}
@@ -47,7 +63,11 @@ export async function resolveNutrition(env, items) {
 
   return Promise.all(
     items.map(async (item, i) => {
-      const match = candidates[i].find((c) => c.id === picks.get(i));
+      let match = candidates[i].find((c) => c.id === picks.get(i));
+      if (match && contradictsSugarFree(item, match)) {
+        console.log(`rejected "${match.name}" for sugar-free "${item.name}"`);
+        match = undefined;
+      }
       if (match) return fromDatabase(item, match);
       if (hasEstimate(item)) return { ...normalize(item), source: "ai", match: null };
       return { ...(await estimate(env, item)), source: "ai", match: null };

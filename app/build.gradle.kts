@@ -76,6 +76,9 @@ dependencies {
 
     // Image display (handles EXIF rotation of captured JPEGs)
     implementation(libs.coil.compose)
+    // Settings (goals, energy unit, server URL)
+    implementation(libs.androidx.datastore.preferences)
+
     // Reads JPEG orientation so the upload is shrunk and rotated correctly
     implementation(libs.androidx.exifinterface)
 

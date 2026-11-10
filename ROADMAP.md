@@ -18,7 +18,7 @@ no paid APIs, no Play Store fee.
 | 1. Camera screen | ✅ Done, tested on Pixel 7 Pro |
 | 2. Photo → Worker → items | ✅ Done, tested |
 | 3. Edit name/amount, live totals, Save to Room | ✅ Done, tested |
-| 4. Daily log + calorie/macro goals | ⬜ Next |
+| 4. Daily log + calorie/macro goals | ✅ Done, checked on the Pixel's screen |
 
 ### Added along the way
 
@@ -37,6 +37,10 @@ no paid APIs, no Play Store fee.
 - Portion sizes are the photo model's guess, so the amount field needs checking.
 - Switching g ↔ mL relabels without rescaling (assumes ~1 g/mL).
 - The Worker URL is open; anyone with it could use up the free daily allowance.
+- Two energy drinks saved on 10 Nov carry wrong numbers (229 kcal sugared match for a zero-sugar can).
+  The matcher is fixed (sugar-free guard), but saved meals don't change. They can be fixed with
+  Phase 3's "edit saved meals" or deleted.
+- Meals saved before schema v2 have no source and show no tag.
 - There's no way to log a food without a photo, or to use an existing photo from the gallery.
 
 ## Plan
@@ -45,13 +49,14 @@ no paid APIs, no Play Store fee.
 - [x] git repo + first commit
 - [x] This roadmap
 
-### Phase 2 — Step 4: Daily log *(doing first)*
-- [ ] Log is the home screen: today's calories and macros against goals (rings/bars)
-- [ ] Meals listed per day with their foods; delete meal / delete item
-- [ ] Move between days (arrows / swipe), "Today" shortcut
-- [ ] Camera button to add a meal; after Save, return to the log
-- [ ] Settings: calorie + protein/carbs/fat goals, kcal / kJ display, Server URL
-- [ ] About: data credits (FSANZ AFCD licence attribution, USDA)
+### Phase 2 — Step 4: Daily log ✅
+- [x] Log is the home screen: energy ring + protein/carbs/fat bars against goals
+- [x] Meals per day (labelled Breakfast/Lunch/… by time) with foods, amounts, macros, source
+- [x] Delete meal / delete food, with Undo (~10 s)
+- [x] Previous/next day arrows and a date picker (no future days)
+- [x] Add meal → camera → results → Save returns to the log on today
+- [x] Settings: kcal / kJ everywhere, goals (default: Australian label reference 8700 kJ / 50 P / 310 C / 70 F),
+      Server URL with Test connection, About with FSANZ/USDA credits
 
 ### Phase 1 — Packaged foods & drinks
 - [ ] Pick a photo from the gallery as well as taking one (also makes testing with saved images easy)
@@ -88,3 +93,6 @@ no paid APIs, no Play Store fee.
 - Worker: `cd worker && npx wrangler deploy`. Rebuild AFCD data after downloading new FSANZ files:
   `python3 -I scripts/build_afcd.py "data/AFCD Release 3 - Nutrient profiles.xlsx" src/afcd.json`.
 - Room schema changes: bump the version, add an `AutoMigration`, and commit the new file in `app/schemas/`.
+- UI testing over adb: don't test delete/Undo against the user's real log. The Undo bar can time out
+  before a scripted tap lands, and the tap then hits whatever is underneath. Use a test day/meal, or
+  back up the database first (`adb exec-out run-as com.calorieapp cat databases/calorie.db`).

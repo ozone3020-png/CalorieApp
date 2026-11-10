@@ -4,7 +4,10 @@ package com.calorieapp.data
 enum class NutritionSource(val label: String) {
     AFCD("AFCD"),
     USDA("USDA"),
-    AI("AI estimate");
+    AI("AI estimate"),
+
+    /** Saved before sources were recorded (database v1). */
+    UNKNOWN("");
 
     companion object {
         fun from(value: String?) = when (value?.lowercase()) {
